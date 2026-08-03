@@ -1,6 +1,6 @@
 use super::{ReportableCrate, common};
 use crate::Result;
-use crate::metrics::MetricCategory;
+use crate::metrics::{MetricCategory, MetricValue};
 use crate::reports::common::ReportContext;
 use core::fmt::Write;
 use std::borrow::Cow;
@@ -15,7 +15,11 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
     // Write header row
     write!(writer, "Metric")?;
     for crate_info in crates {
-        write!(writer, ",{}", escape_csv(&format!("{} v{}", crate_info.name, crate_info.version)))?;
+        write!(
+            writer,
+            ",{}",
+            escape_csv_untrusted(&format!("{} v{}", crate_info.name, crate_info.version))
+        )?;
     }
     writeln!(writer)?;
 
@@ -38,7 +42,7 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
             if let Some(appraisal) = &crate_info.appraisal {
                 let reasons = common::join_with(
                     appraisal.expression_outcomes.iter().map(common::outcome_icon_name), "; ");
-                write!(writer, ",{}", escape_csv(&reasons))?;
+                write!(writer, ",{}", escape_csv_untrusted(&reasons))?;
             } else {
                 write!(writer, ",")?;
             }
@@ -61,7 +65,12 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
                     {
                         metric_buf.clear();
                         common::write_metric_value(&mut metric_buf, value);
-                        write!(writer, ",{}", escape_csv(&metric_buf))?;
+                        let escaped = if is_textual_metric_value(value) {
+                            escape_csv_untrusted(&metric_buf)
+                        } else {
+                            escape_csv(&metric_buf)
+                        };
+                        write!(writer, ",{escaped}")?;
                     } else {
                         write!(writer, ",")?;
                     }
@@ -72,6 +81,26 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
     }
 
     Ok(())
+}
+
+fn is_textual_metric_value(value: &MetricValue) -> bool {
+    match value {
+        MetricValue::String(_) => true,
+        MetricValue::List(values) => values.first().is_some_and(is_textual_metric_value),
+        MetricValue::UInt(_) | MetricValue::Float(_) | MetricValue::Boolean(_) | MetricValue::DateTime(_) => false,
+    }
+}
+
+/// Prevent spreadsheet software from interpreting untrusted text as a formula.
+fn escape_csv_untrusted(s: &str) -> Cow<'_, str> {
+    if s.starts_with(['=', '+', '-', '@']) {
+        let mut neutralized = String::with_capacity(s.len() + 1);
+        neutralized.push('\'');
+        neutralized.push_str(s);
+        Cow::Owned(escape_csv(&neutralized).into_owned())
+    } else {
+        escape_csv(s)
+    }
 }
 
 /// Escape a value for RFC compliant CSV output.
@@ -166,6 +195,27 @@ mod tests {
     }
 
     #[test]
+    fn test_escape_csv_untrusted_neutralizes_formula_prefixes() {
+        for value in ["=1+1", "+cmd", "-cmd", "@SUM(A1:A2)"] {
+            assert_eq!(escape_csv_untrusted(value), format!("'{value}"));
+        }
+    }
+
+    #[test]
+    fn test_escape_csv_untrusted_quotes_neutralized_formula() {
+        assert_eq!(
+            escape_csv_untrusted("=SUM(1,1)"),
+            "\"'=SUM(1,1)\""
+        );
+    }
+
+    #[test]
+    fn test_numeric_metric_values_remain_numeric() {
+        assert!(!is_textual_metric_value(&MetricValue::Float(-1.0)));
+        assert!(is_textual_metric_value(&MetricValue::String("-1".into())));
+    }
+
+    #[test]
     fn test_generate_empty_crates() {
         let crates: Vec<ReportableCrate> = vec![];
         let mut output = String::new();
@@ -206,6 +256,27 @@ mod tests {
         result.unwrap();
         assert!(output.contains("Appraisals,LOW RISK"));
         assert!(output.contains("Reasons,✔\u{fe0f} good: Good; ✔\u{fe0f} quality: Quality"));
+    }
+
+    #[test]
+    fn test_generate_neutralizes_formula_in_expression_description() {
+        let eval = Appraisal {
+            risk: Risk::High,
+            expression_outcomes: vec![ExpressionOutcome::new(
+                "Policy".into(),
+                "=HYPERLINK(\"https://example.invalid\")".into(),
+                ExpressionDisposition::False,
+            )],
+            available_points: 1,
+            awarded_points: 0,
+            score: 0.0,
+        };
+        let crates = vec![create_test_crate("test_crate", "1.0.0", Some(eval))];
+        let mut output = String::new();
+
+        generate(&crates, &mut output).unwrap();
+
+        assert!(output.contains("Reasons,\"❌ Policy: =HYPERLINK(\"\"https://example.invalid\"\")\""));
     }
 
     #[test]

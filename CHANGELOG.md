@@ -7,6 +7,7 @@
 - Updated dependencies
 - Explain required-check failures without displaying a misleading zero-out-of-zero score
 - Include policy descriptions in expression output and list blocking crates in risk-check errors
+- Neutralize formula-like untrusted text in CSV reports
 
 ### Performance
 
