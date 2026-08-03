@@ -205,7 +205,7 @@ mod tests {
         let result = generate(&crates, &mut output);
         result.unwrap();
         assert!(output.contains("Appraisals,LOW RISK"));
-        assert!(output.contains("Reasons,✔\u{fe0f} good; ✔\u{fe0f} quality"));
+        assert!(output.contains("Reasons,✔\u{fe0f} good: Good; ✔\u{fe0f} quality: Quality"));
     }
 
     #[test]

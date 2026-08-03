@@ -3,7 +3,7 @@
 use super::ProgressReporter;
 use super::config::Config;
 use crate::Result;
-use crate::expr::{Risk, evaluate};
+use crate::expr::{ExpressionDisposition, Risk, evaluate};
 use crate::facts::{Collector, CrateFacts, CrateRef, ProviderResult};
 use crate::metrics::flatten;
 use crate::reports::ReportableCrate;
@@ -13,6 +13,7 @@ use cargo_metadata::MetadataCommand;
 use chrono::Local;
 use clap::Args;
 use clap::ValueEnum;
+use core::fmt::Write as _;
 use core::time::Duration;
 use directories::BaseDirs;
 use ohno::IntoAppError;
@@ -434,36 +435,76 @@ fn check_risk_errors(
     error_if_medium_risk: bool,
     error_if_high_risk: bool,
 ) -> Result<()> {
-    if error_if_medium_risk {
-        let has_rejected = reportable_crates.iter().any(|crate_info| {
-            crate_info.appraisal.as_ref().is_some_and(|eval| matches!(eval.risk, Risk::Medium | Risk::High))
-                && !config.is_allowed(&crate_info.name, &crate_info.version)
-        });
+    let rejected_risks: fn(Risk) -> bool = if error_if_medium_risk {
+        |risk| matches!(risk, Risk::Medium | Risk::High)
+    } else if error_if_high_risk {
+        |risk| risk == Risk::High
+    } else {
+        return Ok(());
+    };
 
-        if has_rejected {
-            return Err(ohno::AppError::new("one or more crates were flagged as medium or high risk"));
+    let rejected: Vec<_> = reportable_crates
+        .iter()
+        .filter(|crate_info| {
+            crate_info
+                .appraisal
+                .as_ref()
+                .is_some_and(|appraisal| rejected_risks(appraisal.risk))
+                && !config.is_allowed(&crate_info.name, &crate_info.version)
+        })
+        .collect();
+
+    if rejected.is_empty() {
+        return Ok(());
+    }
+
+    let threshold = if error_if_medium_risk {
+        "medium or high risk"
+    } else {
+        "high risk"
+    };
+    let mut message = format!(
+        "{} {} {} appraised as {threshold} and caused rejection:",
+        rejected.len(),
+        if rejected.len() == 1 { "crate" } else { "crates" },
+        if rejected.len() == 1 { "was" } else { "were" }
+    );
+
+    for crate_info in rejected {
+        let appraisal = crate_info.appraisal.as_ref().expect("rejected crates have an appraisal");
+        let _ = write!(
+            message,
+            "\n- {} v{}: {}",
+            crate_info.name,
+            crate_info.version,
+            appraisal.risk
+        );
+
+        for outcome in appraisal
+            .expression_outcomes
+            .iter()
+            .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
+        {
+            let _ = write!(message, "\n    - {}: {}", outcome.name, outcome.description);
+            if let ExpressionDisposition::Failed(reason) = &outcome.disposition {
+                let _ = write!(message, " (failure to evaluate: {reason})");
+            }
         }
     }
 
-    if error_if_high_risk {
-        let has_rejected = reportable_crates.iter().any(|crate_info| {
-            crate_info.appraisal.as_ref().is_some_and(|eval| eval.risk == Risk::High)
-                && !config.is_allowed(&crate_info.name, &crate_info.version)
-        });
+    message.push_str(
+        "\nReview the failed checks and remediate, upgrade, or replace the affected dependencies. \
+         To acknowledge a temporary exception, add the exact crate name and version to [[allow_list]] in aprz.toml.",
+    );
 
-        if has_rejected {
-            return Err(ohno::AppError::new("one or more crates were flagged as high risk"));
-        }
-    }
-
-    Ok(())
+    Err(ohno::AppError::new(message))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::commands::config::AllowListEntry;
-    use crate::expr::{Appraisal, Risk};
+    use crate::expr::{Appraisal, ExpressionDisposition, ExpressionOutcome, Risk};
     use semver::{Version, VersionReq};
 
     fn make_crate(name: &str, version: Version, risk: Risk) -> ReportableCrate {
@@ -472,6 +513,25 @@ mod tests {
             Arc::new(version),
             vec![],
             Some(Appraisal::new(risk, vec![], 0, 0, 0.0)),
+        )
+    }
+
+    fn make_crate_with_failure(name: &str, version: Version, risk: Risk) -> ReportableCrate {
+        ReportableCrate::new(
+            Arc::from(name),
+            Arc::new(version),
+            vec![],
+            Some(Appraisal::new(
+                risk,
+                vec![ExpressionOutcome::new(
+                    "Sound Crate".into(),
+                    "The crate is not flagged as unsound.".into(),
+                    ExpressionDisposition::False,
+                )],
+                0,
+                0,
+                0.0,
+            )),
         )
     }
 
@@ -484,9 +544,14 @@ mod tests {
 
     #[test]
     fn test_check_risk_errors_high_risk_flag_rejects() {
-        let crates = vec![make_crate("foo", Version::new(1, 0, 0), Risk::High)];
+        let crates = vec![make_crate_with_failure("foo", Version::new(1, 0, 0), Risk::High)];
         let config = Config::default();
-        let _ = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let error = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("1 crate was appraised as high risk and caused rejection"));
+        assert!(message.contains("- foo v1.0.0: HIGH RISK"));
+        assert!(message.contains("Sound Crate: The crate is not flagged as unsound."));
+        assert!(message.contains("[[allow_list]]"));
     }
 
     #[test]
@@ -565,7 +630,7 @@ mod tests {
     fn test_check_risk_errors_mixed_crates_one_allowed() {
         let crates = vec![
             make_crate("foo", Version::new(1, 0, 0), Risk::High),
-            make_crate("bar", Version::new(1, 0, 0), Risk::High),
+            make_crate_with_failure("bar", Version::new(1, 0, 0), Risk::High),
         ];
         let mut config = Config::default();
         config.allow_list.push(AllowListEntry {
@@ -573,7 +638,10 @@ mod tests {
             version: VersionReq::parse("*").unwrap(),
         });
         // bar is still high risk and not allowed
-        let _ = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let error = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let message = error.to_string();
+        assert!(!message.contains("foo v1.0.0"));
+        assert!(message.contains("bar v1.0.0"));
     }
 
     #[test]
@@ -594,4 +662,3 @@ mod tests {
         check_risk_errors(&crates, &config, true, true).unwrap();
     }
 }
-

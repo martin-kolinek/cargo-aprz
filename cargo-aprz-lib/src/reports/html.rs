@@ -531,11 +531,24 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
             Risk::High => ("high", "HIGH RISK"),
         };
         writeln!(writer, "        <span class=\"header-right\">")?;
-        writeln!(
-            writer,
-            "          <span class=\"appraisal-score\">score {:.0} · {}/{} points</span>",
-            appraisal.score, appraisal.awarded_points, appraisal.available_points
-        )?;
+        let failed_required_checks = common::failed_required_check_count(appraisal);
+        if failed_required_checks > 0 {
+            let noun = if failed_required_checks == 1 {
+                "required check failed"
+            } else {
+                "required checks failed"
+            };
+            writeln!(
+                writer,
+                "          <span class=\"appraisal-score\">{failed_required_checks} {noun} · score not calculated</span>"
+            )?;
+        } else {
+            writeln!(
+                writer,
+                "          <span class=\"appraisal-score\">score {:.0} · {}/{} points</span>",
+                appraisal.score, appraisal.awarded_points, appraisal.available_points
+            )?;
+        }
         writeln!(writer, "          <span class=\"risk-badge {class}\">{label}</span>")?;
         writeln!(writer, "        </span>")?;
     } else {
@@ -784,7 +797,7 @@ fn format_keywords_or_categories<W: Write>(value: &str, url_type: &str, writer: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::expr::Appraisal;
+    use crate::expr::{Appraisal, ExpressionDisposition, ExpressionOutcome};
     use crate::metrics::{Metric, MetricDef, MetricValue};
     use chrono::TimeZone;
     use std::sync::Arc;
@@ -870,6 +883,28 @@ mod tests {
         assert!(output.contains("<!DOCTYPE html>"));
         assert!(output.contains("Crate Appraisal Report"));
         assert!(output.contains("cargo-aprz"));
+    }
+
+    #[test]
+    fn test_crate_header_explains_required_check_failure() {
+        let appraisal = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
+                "Sound Crate".into(),
+                "The crate is not flagged as unsound.".into(),
+                ExpressionDisposition::False,
+            )],
+            0,
+            0,
+            0.0,
+        );
+        let crate_info = create_test_crate("event-listener", "5.4.1", Some(appraisal));
+        let mut output = String::new();
+
+        write_crate_card_header(&mut output, &crate_info).unwrap();
+
+        assert!(output.contains("1 required check failed · score not calculated"));
+        assert!(!output.contains("score 0"));
     }
 
     #[test]

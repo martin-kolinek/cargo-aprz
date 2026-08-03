@@ -4,7 +4,7 @@ expression: csv_output
 ---
 Metric,comprehensive-crate v2.0.0
 Appraisals,LOW RISK (score = 100, awarded points = 3, available points = 3)
-Reasons,✔️ coverage; ✔️ active; ✔️ maintained
+Reasons,✔️ coverage: Excellent coverage; ✔️ active: Active development; ✔️ maintained: Well maintained
 crate.name,comprehensive-crate
 crate.version,2.0.0
 crate.keywords,"test, comprehensive, snapshot"

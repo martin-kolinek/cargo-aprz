@@ -3,9 +3,9 @@ source: cargo-aprz-lib/src/reports/mod.rs
 expression: console_output
 ---
 comprehensive-crate v2.0.0 is appraised as LOW RISK (score = 100, awarded points = 3, available points = 3)
-  ✔️ coverage
-  ✔️ active
-  ✔️ maintained
+  ✔️ coverage: Excellent coverage
+  ✔️ active: Active development
+  ✔️ maintained: Well maintained
 
 Metadata
   crate.name     : comprehensive-crate

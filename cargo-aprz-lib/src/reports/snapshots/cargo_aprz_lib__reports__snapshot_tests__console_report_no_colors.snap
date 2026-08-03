@@ -3,7 +3,7 @@ source: cargo-aprz-lib/src/reports/mod.rs
 expression: output
 ---
 tokio v1.35.0 is appraised as LOW RISK (score = 100, awarded points = 1, available points = 1)
-  ✔️ high_stars
+  ✔️ high_stars: High stars and good coverage
 
 Metadata
   crate.name     : tokio
@@ -26,7 +26,7 @@ Trustworthiness
 ═══════════════════════════════════════
 
 serde v1.0.195 is appraised as HIGH RISK (score = 0, awarded points = 0, available points = 1)
-  ❌ low_stars
+  ❌ low_stars: Low star count
 
 Metadata
   crate.name     : serde

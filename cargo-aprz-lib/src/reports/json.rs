@@ -21,9 +21,12 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
             eval_obj.insert("reasons".into(), json!(appraisal.expression_outcomes.iter()
                 .map(|o| {
                     if let ExpressionDisposition::Failed(reason) = &o.disposition {
-                        format!("{} (failure to evaluate: {reason})", o.name)
+                        format!(
+                            "{}: {} (failure to evaluate: {reason})",
+                            o.name, o.description
+                        )
                     } else {
-                        o.name.to_string()
+                        format!("{}: {}", o.name, o.description)
                     }
                 })
                 .collect::<Vec<_>>()));
@@ -168,7 +171,7 @@ mod tests {
         result.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(parsed["crates"][0]["appraisal"]["result"], "LOW RISK (score = 100, awarded points = 1, available points = 1)");
-        assert_eq!(parsed["crates"][0]["appraisal"]["reasons"][0], "good");
+        assert_eq!(parsed["crates"][0]["appraisal"]["reasons"][0], "good: Good");
     }
 
     #[test]

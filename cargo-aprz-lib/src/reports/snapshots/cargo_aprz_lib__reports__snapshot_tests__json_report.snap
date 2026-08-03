@@ -7,7 +7,7 @@ expression: output
     {
       "appraisal": {
         "reasons": [
-          "high_stars"
+          "high_stars: High stars and good coverage"
         ],
         "result": "LOW RISK (score = 100, awarded points = 1, available points = 1)"
       },
@@ -30,7 +30,7 @@ expression: output
     {
       "appraisal": {
         "reasons": [
-          "low_stars"
+          "low_stars: Low star count"
         ],
         "result": "HIGH RISK (score = 0, awarded points = 0, available points = 1)"
       },
