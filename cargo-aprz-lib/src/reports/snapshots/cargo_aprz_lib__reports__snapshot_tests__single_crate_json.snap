@@ -7,9 +7,9 @@ expression: json_output
     {
       "appraisal": {
         "reasons": [
-          "coverage: Excellent coverage",
-          "active: Active development",
-          "maintained: Well maintained"
+          "coverage",
+          "active",
+          "maintained"
         ],
         "result": "LOW RISK (score = 100, awarded points = 3, available points = 3)"
       },

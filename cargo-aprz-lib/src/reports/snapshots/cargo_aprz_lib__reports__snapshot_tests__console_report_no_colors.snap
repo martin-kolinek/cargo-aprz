@@ -3,7 +3,7 @@ source: cargo-aprz-lib/src/reports/mod.rs
 expression: output
 ---
 tokio v1.35.0 is appraised as LOW RISK (score = 100, awarded points = 1, available points = 1)
-  ✔️ high_stars: High stars and good coverage
+  ✔️ high_stars
 
 Metadata
   crate.name     : tokio

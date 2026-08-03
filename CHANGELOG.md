@@ -8,6 +8,7 @@
 - Explain required-check failures without displaying a misleading zero-out-of-zero score
 - Include policy descriptions in expression output and list blocking crates in risk-check errors
 - Neutralize formula-like untrusted text in CSV reports
+- Flat report reasons now include descriptions for failed or inconclusive checks; passing-check output remains name-only
 
 ### Performance
 

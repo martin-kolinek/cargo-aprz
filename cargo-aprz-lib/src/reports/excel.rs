@@ -251,6 +251,7 @@ mod tests {
     fn test_generate_single_crate_with_evaluation() {
         let eval = Appraisal {
             risk: Risk::Low,
+            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True)],
             available_points: 1,
             awarded_points: 1,
@@ -284,6 +285,7 @@ mod tests {
     fn test_generate_denied_status() {
         let eval = Appraisal {
             risk: Risk::High,
+            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
             available_points: 1,
             awarded_points: 0,

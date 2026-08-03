@@ -11,16 +11,19 @@
    configured thresholds determine the risk level.
 
 Reports distinguish a failed required check from a zero-point weighted score.
-Expression results include both the configured check name and description so
-users can understand what the policy requires.
+Failed and inconclusive expression results include both the configured check
+name and description so users can understand what the policy requires. Passing
+results remain name-only to keep output concise.
 
 CSV reports neutralize text cells beginning with spreadsheet formula characters
 (`=`, `+`, `-`, or `@`) by prefixing an apostrophe. Numeric metric values remain
 numeric so spreadsheet consumers can continue to sort and calculate with them.
 
 When `--error-if-high-risk` or `--error-if-medium-risk` rejects a run, the final
-error lists every non-allowed crate that caused the rejection and its failed
-checks. The error directs users to remediate, upgrade, or replace the dependency.
+error lists every non-allowed crate that caused the rejection. Required-gate
+rejections include the failed check names; score-based rejections include the
+score rather than every weighted expression that contributed to it. The error
+directs users to remediate, upgrade, or replace the dependency.
 If a temporary policy exception is appropriate, users can add an exact crate
 version to `[[allow_list]]`; allowed crates remain visible in reports but do not
 fail the command.

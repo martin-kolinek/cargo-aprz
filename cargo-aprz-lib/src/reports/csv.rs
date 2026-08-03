@@ -242,6 +242,7 @@ mod tests {
     fn test_generate_single_crate_with_evaluation() {
         let eval = Appraisal {
             risk: Risk::Low,
+            required_check_failure: false,
             expression_outcomes: vec![
                 ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True),
                 ExpressionOutcome::new("quality".into(), "Quality".into(), ExpressionDisposition::True),
@@ -255,13 +256,14 @@ mod tests {
         let result = generate(&crates, &mut output);
         result.unwrap();
         assert!(output.contains("Appraisals,LOW RISK"));
-        assert!(output.contains("Reasons,✔\u{fe0f} good: Good; ✔\u{fe0f} quality: Quality"));
+        assert!(output.contains("Reasons,✔\u{fe0f} good; ✔\u{fe0f} quality"));
     }
 
     #[test]
     fn test_generate_neutralizes_formula_in_expression_description() {
         let eval = Appraisal {
             risk: Risk::High,
+            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new(
                 "Policy".into(),
                 "=HYPERLINK(\"https://example.invalid\")".into(),
@@ -297,6 +299,7 @@ mod tests {
     fn test_generate_with_special_characters() {
         let eval = Appraisal {
             risk: Risk::Low,
+            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("quotes".into(), "Reason with \"quotes\"".into(), ExpressionDisposition::True)],
             available_points: 1,
             awarded_points: 1,
@@ -314,6 +317,7 @@ mod tests {
     fn test_generate_denied_status() {
         let eval = Appraisal {
             risk: Risk::High,
+            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
             available_points: 1,
             awarded_points: 0,

@@ -472,23 +472,20 @@ fn check_risk_errors(
 
     for crate_info in rejected {
         let appraisal = crate_info.appraisal.as_ref().expect("rejected crates have an appraisal");
-        let _ = write!(
-            message,
-            "\n- {} v{}: {}",
-            crate_info.name,
-            crate_info.version,
-            appraisal.risk
-        );
+        let _ = write!(message, "\n- {} v{}", crate_info.name, crate_info.version);
 
-        for outcome in appraisal
-            .expression_outcomes
-            .iter()
-            .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
-        {
-            let _ = write!(message, "\n    - {}: {}", outcome.name, outcome.description);
-            if let ExpressionDisposition::Failed(reason) = &outcome.disposition {
-                let _ = write!(message, " (failure to evaluate: {reason})");
+        if error_if_medium_risk {
+            let _ = write!(message, ": {} (score {:.0})", appraisal.risk, appraisal.score);
+        } else if appraisal.required_check_failure {
+            for outcome in appraisal
+                .expression_outcomes
+                .iter()
+                .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
+            {
+                let _ = write!(message, "\n    - {}", outcome.name);
             }
+        } else {
+            let _ = write!(message, ": score {:.0}", appraisal.score);
         }
     }
 
@@ -516,22 +513,18 @@ mod tests {
         )
     }
 
-    fn make_crate_with_failure(name: &str, version: Version, risk: Risk) -> ReportableCrate {
+    fn make_crate_with_failure(name: &str, version: Version) -> ReportableCrate {
         ReportableCrate::new(
             Arc::from(name),
             Arc::new(version),
             vec![],
-            Some(Appraisal::new(
-                risk,
-                vec![ExpressionOutcome::new(
+            Some(Appraisal::required_check_failure(vec![
+                ExpressionOutcome::new(
                     "Sound Crate".into(),
                     "The crate is not flagged as unsound.".into(),
                     ExpressionDisposition::False,
-                )],
-                0,
-                0,
-                0.0,
-            )),
+                ),
+            ])),
         )
     }
 
@@ -544,13 +537,14 @@ mod tests {
 
     #[test]
     fn test_check_risk_errors_high_risk_flag_rejects() {
-        let crates = vec![make_crate_with_failure("foo", Version::new(1, 0, 0), Risk::High)];
+        let crates = vec![make_crate_with_failure("foo", Version::new(1, 0, 0))];
         let config = Config::default();
         let error = check_risk_errors(&crates, &config, false, true).unwrap_err();
         let message = error.to_string();
         assert!(message.contains("1 crate was appraised as high risk and caused rejection"));
-        assert!(message.contains("- foo v1.0.0: HIGH RISK"));
-        assert!(message.contains("Sound Crate: The crate is not flagged as unsound."));
+        assert!(message.contains("- foo v1.0.0"));
+        assert!(message.contains("    - Sound Crate"));
+        assert!(!message.contains("The crate is not flagged as unsound."));
         assert!(message.contains("[[allow_list]]"));
     }
 
@@ -630,7 +624,7 @@ mod tests {
     fn test_check_risk_errors_mixed_crates_one_allowed() {
         let crates = vec![
             make_crate("foo", Version::new(1, 0, 0), Risk::High),
-            make_crate_with_failure("bar", Version::new(1, 0, 0), Risk::High),
+            make_crate_with_failure("bar", Version::new(1, 0, 0)),
         ];
         let mut config = Config::default();
         config.allow_list.push(AllowListEntry {

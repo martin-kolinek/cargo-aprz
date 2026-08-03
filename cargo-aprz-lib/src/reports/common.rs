@@ -103,7 +103,7 @@ pub const fn format_risk_status(risk: Risk) -> &'static str {
 
 /// Return the number of failed required checks when weighted scoring was skipped.
 pub fn failed_required_check_count(appraisal: &Appraisal) -> usize {
-    if appraisal.risk != Risk::High || appraisal.available_points != 0 {
+    if !appraisal.required_check_failure {
         return 0;
     }
 
@@ -117,7 +117,7 @@ pub fn failed_required_check_count(appraisal: &Appraisal) -> usize {
 /// Format the details of an appraisal without its risk label.
 pub fn format_appraisal_details(appraisal: &Appraisal) -> String {
     let failed_required_checks = failed_required_check_count(appraisal);
-    if appraisal.risk == Risk::High && appraisal.available_points == 0 && failed_required_checks > 0 {
+    if failed_required_checks > 0 {
         let noun = if failed_required_checks == 1 {
             "required check failed"
         } else {
@@ -161,15 +161,17 @@ pub struct IconName<'a>(&'a ExpressionOutcome);
 
 impl fmt::Display for IconName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} {}: {}",
-            outcome_icon(self.0),
-            self.0.name,
-            self.0.description
-        )?;
-        if let ExpressionDisposition::Failed(reason) = &self.0.disposition {
-            write!(f, " (failure to evaluate: {reason})")?;
+        write!(f, "{} {}", outcome_icon(self.0), self.0.name)?;
+        match &self.0.disposition {
+            ExpressionDisposition::True => {}
+            ExpressionDisposition::False => write!(f, ": {}", self.0.description)?,
+            ExpressionDisposition::Failed(reason) => {
+                write!(
+                    f,
+                    ": {} (failure to evaluate: {reason})",
+                    self.0.description
+                )?;
+            }
         }
         Ok(())
     }
@@ -366,17 +368,13 @@ mod tests {
 
     #[test]
     fn test_format_appraisal_status_explains_required_check_failure() {
-        let appraisal = Appraisal::new(
-            Risk::High,
-            vec![ExpressionOutcome::new(
+        let appraisal = Appraisal::required_check_failure(vec![
+            ExpressionOutcome::new(
                 "Sound Crate".into(),
                 "The crate is not flagged as unsound.".into(),
                 ExpressionDisposition::False,
-            )],
-            0,
-            0,
-            0.0,
-        );
+            ),
+        ]);
 
         assert_eq!(
             format_appraisal_status(&appraisal),
@@ -396,6 +394,17 @@ mod tests {
             outcome_icon_name(&outcome).to_string(),
             "❌ Sound Crate: The crate is not flagged as unsound."
         );
+    }
+
+    #[test]
+    fn test_outcome_icon_name_omits_description_for_passing_check() {
+        let outcome = ExpressionOutcome::new(
+            "Sound Crate".into(),
+            "The crate is not flagged as unsound.".into(),
+            ExpressionDisposition::True,
+        );
+
+        assert_eq!(outcome_icon_name(&outcome).to_string(), "✔️ Sound Crate");
     }
 
     #[test]

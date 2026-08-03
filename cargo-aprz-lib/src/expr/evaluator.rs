@@ -58,7 +58,7 @@ pub fn evaluate(
     }
 
     if high_risk_triggered {
-        return Appraisal::new(Risk::High, high_risk_outcomes, 0, 0, 0.0);
+        return Appraisal::required_check_failure(high_risk_outcomes);
     }
 
     if eval.is_empty() {

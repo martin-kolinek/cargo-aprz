@@ -887,17 +887,13 @@ mod tests {
 
     #[test]
     fn test_crate_header_explains_required_check_failure() {
-        let appraisal = Appraisal::new(
-            Risk::High,
-            vec![ExpressionOutcome::new(
+        let appraisal = Appraisal::required_check_failure(vec![
+            ExpressionOutcome::new(
                 "Sound Crate".into(),
                 "The crate is not flagged as unsound.".into(),
                 ExpressionDisposition::False,
-            )],
-            0,
-            0,
-            0.0,
-        );
+            ),
+        ]);
         let crate_info = create_test_crate("event-listener", "5.4.1", Some(appraisal));
         let mut output = String::new();
 

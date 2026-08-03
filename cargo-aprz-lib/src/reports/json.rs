@@ -20,13 +20,15 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
             eval_obj.insert("result".into(), json!(common::format_appraisal_status(appraisal)));
             eval_obj.insert("reasons".into(), json!(appraisal.expression_outcomes.iter()
                 .map(|o| {
-                    if let ExpressionDisposition::Failed(reason) = &o.disposition {
-                        format!(
+                    match &o.disposition {
+                        ExpressionDisposition::True => o.name.to_string(),
+                        ExpressionDisposition::False => {
+                            format!("{}: {}", o.name, o.description)
+                        }
+                        ExpressionDisposition::Failed(reason) => format!(
                             "{}: {} (failure to evaluate: {reason})",
                             o.name, o.description
-                        )
-                    } else {
-                        format!("{}: {}", o.name, o.description)
+                        ),
                     }
                 })
                 .collect::<Vec<_>>()));
@@ -160,6 +162,7 @@ mod tests {
     fn test_generate_single_crate_with_evaluation() {
         let eval = Appraisal {
             risk: Risk::Low,
+            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True)],
             available_points: 1,
             awarded_points: 1,
@@ -171,7 +174,7 @@ mod tests {
         result.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(parsed["crates"][0]["appraisal"]["result"], "LOW RISK (score = 100, awarded points = 1, available points = 1)");
-        assert_eq!(parsed["crates"][0]["appraisal"]["reasons"][0], "good: Good");
+        assert_eq!(parsed["crates"][0]["appraisal"]["reasons"][0], "good");
     }
 
     #[test]
@@ -193,6 +196,7 @@ mod tests {
     fn test_generate_denied_status() {
         let eval = Appraisal {
             risk: Risk::High,
+            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
             available_points: 1,
             awarded_points: 0,
