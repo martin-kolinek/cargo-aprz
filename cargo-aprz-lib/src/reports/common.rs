@@ -110,7 +110,7 @@ pub fn required_check_counts(appraisal: &Appraisal) -> (usize, usize) {
     appraisal
         .expression_outcomes
         .iter()
-        .fold((0, 0), |(failed, inconclusive), outcome| match outcome.disposition {
+        .fold((0, 0), |(failed, inconclusive), outcome| match &outcome.disposition {
             ExpressionDisposition::False => (failed + 1, inconclusive),
             ExpressionDisposition::Failed(_) => (failed, inconclusive + 1),
             ExpressionDisposition::True => (failed, inconclusive),
