@@ -93,7 +93,7 @@ fn is_textual_metric_value(value: &MetricValue) -> bool {
 
 /// Prevent spreadsheet software from interpreting untrusted text as a formula.
 fn escape_csv_untrusted(s: &str) -> Cow<'_, str> {
-    if s.starts_with(['=', '+', '-', '@']) {
+    if s.trim_start().starts_with(['=', '+', '-', '@']) {
         let mut neutralized = String::with_capacity(s.len() + 1);
         neutralized.push('\'');
         neutralized.push_str(s);
@@ -199,6 +199,22 @@ mod tests {
         for value in ["=1+1", "+cmd", "-cmd", "@SUM(A1:A2)"] {
             assert_eq!(escape_csv_untrusted(value), format!("'{value}"));
         }
+    }
+
+    #[test]
+    fn test_escape_csv_untrusted_neutralizes_whitespace_prefixed_formulas() {
+        for value in [" =1+1", "\t+cmd", "\r\n-cmd", "\n@SUM(A1:A2)"] {
+            assert_eq!(
+                escape_csv_untrusted(value),
+                escape_csv(&format!("'{value}"))
+            );
+        }
+    }
+
+    #[test]
+    fn test_escape_csv_untrusted_preserves_non_formula_whitespace() {
+        assert_eq!(escape_csv_untrusted(" normal text"), " normal text");
+        assert_eq!(escape_csv_untrusted("\ttext"), "\ttext");
     }
 
     #[test]

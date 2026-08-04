@@ -474,9 +474,7 @@ fn check_risk_errors(
         let appraisal = crate_info.appraisal.as_ref().expect("rejected crates have an appraisal");
         let _ = write!(message, "\n- {} v{}", crate_info.name, crate_info.version);
 
-        if error_if_medium_risk {
-            let _ = write!(message, ": {} (score {:.0})", appraisal.risk, appraisal.score);
-        } else if appraisal.required_check_failure {
+        if appraisal.required_check_failure {
             for outcome in appraisal
                 .expression_outcomes
                 .iter()
@@ -484,6 +482,8 @@ fn check_risk_errors(
             {
                 let _ = write!(message, "\n    - {}", outcome.name);
             }
+        } else if error_if_medium_risk {
+            let _ = write!(message, ": {} (score {:.0})", appraisal.risk, appraisal.score);
         } else {
             let _ = write!(message, ": score {:.0}", appraisal.score);
         }
@@ -567,6 +567,17 @@ mod tests {
         let crates = vec![make_crate("foo", Version::new(1, 0, 0), Risk::High)];
         let config = Config::default();
         let _ = check_risk_errors(&crates, &config, true, false).unwrap_err();
+    }
+
+    #[test]
+    fn test_check_risk_errors_medium_risk_flag_explains_required_failure() {
+        let crates = vec![make_crate_with_failure("foo", Version::new(1, 0, 0))];
+        let config = Config::default();
+        let error = check_risk_errors(&crates, &config, true, false).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("- foo v1.0.0\n    - Sound Crate"));
+        assert!(!message.contains("score 0"));
     }
 
     #[test]

@@ -15,9 +15,11 @@ Failed and inconclusive expression results include both the configured check
 name and description so users can understand what the policy requires. Passing
 results remain name-only to keep output concise.
 
-CSV reports neutralize text cells beginning with spreadsheet formula characters
-(`=`, `+`, `-`, or `@`) by prefixing an apostrophe. Numeric metric values remain
-numeric so spreadsheet consumers can continue to sort and calculate with them.
+CSV reports neutralize text cells whose first non-whitespace character is a
+spreadsheet formula marker (`=`, `+`, `-`, or `@`) by prefixing an apostrophe.
+This includes formulas hidden behind spaces, tabs, or line breaks. Numeric
+metric values remain numeric so spreadsheet consumers can continue to sort and
+calculate with them.
 
 When `--error-if-high-risk` or `--error-if-medium-risk` rejects a run, the final
 error lists every non-allowed crate that caused the rejection. Required-gate
