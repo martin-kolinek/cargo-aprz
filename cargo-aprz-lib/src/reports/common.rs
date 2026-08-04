@@ -383,6 +383,54 @@ mod tests {
     }
 
     #[test]
+    fn test_failed_required_check_count_counts_false_and_failed_outcomes() {
+        let appraisal = Appraisal::required_check_failure(vec![
+            ExpressionOutcome::new(
+                "Pass".into(),
+                "Passes.".into(),
+                ExpressionDisposition::True,
+            ),
+            ExpressionOutcome::new(
+                "Fail".into(),
+                "Fails.".into(),
+                ExpressionDisposition::False,
+            ),
+            ExpressionOutcome::new(
+                "Error".into(),
+                "Cannot evaluate.".into(),
+                ExpressionDisposition::Failed("missing fact".into()),
+            ),
+        ]);
+
+        assert_eq!(failed_required_check_count(&appraisal), 2);
+        assert_eq!(
+            format_appraisal_details(&appraisal),
+            "2 required checks failed; weighted score not calculated"
+        );
+    }
+
+    #[test]
+    fn test_failed_required_check_count_ignores_weighted_outcomes() {
+        let appraisal = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
+                "Weighted".into(),
+                "Did not earn points.".into(),
+                ExpressionDisposition::False,
+            )],
+            10,
+            2,
+            20.0,
+        );
+
+        assert_eq!(failed_required_check_count(&appraisal), 0);
+        assert_eq!(
+            format_appraisal_details(&appraisal),
+            "score = 20, awarded points = 2, available points = 10"
+        );
+    }
+
+    #[test]
     fn test_outcome_icon_name_includes_description() {
         let outcome = ExpressionOutcome::new(
             "Sound Crate".into(),
