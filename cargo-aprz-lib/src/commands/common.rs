@@ -486,11 +486,17 @@ fn check_risk_errors(
         let _ = write!(message, "\n- {} v{}", crate_info.name, crate_info.version);
 
         if appraisal.is_required_check_failure() {
+            let _ = write!(
+                message,
+                ": {} (weighted score not calculated)",
+                appraisal.risk
+            );
             details_were_capped |= append_non_passing_outcomes(
                 &mut message,
                 &appraisal.expression_outcomes,
                 MAX_OUTCOMES_PER_CRATE,
                 include_check_details,
+                "required check",
                 "required checks",
             );
         } else {
@@ -503,18 +509,22 @@ fn check_risk_errors(
                     &appraisal.expression_outcomes,
                     MAX_OUTCOMES_PER_CRATE,
                     true,
+                    "non-passing outcome",
                     "non-passing outcomes",
                 );
             }
         }
     }
     if rejected.len() > MAX_REJECTED_CRATES {
+        let omitted = rejected.len() - MAX_REJECTED_CRATES;
         let _ = write!(
             message,
-            "\n- ... and {} more rejected crates",
-            rejected.len() - MAX_REJECTED_CRATES
+            "\n- ... and {omitted} more rejected {}",
+            if omitted == 1 { "crate" } else { "crates" }
         );
     }
+    // The pointer is unnecessary only when the console already rendered both
+    // the appraisal and its reasons immediately before this concise error.
     if include_check_details && details_were_capped {
         message.push_str(
             "\nRun with --console appraisal,reasons or write --json <path> for complete appraisal details.",
@@ -534,7 +544,8 @@ fn append_non_passing_outcomes(
     outcomes: &[ExpressionOutcome],
     limit: usize,
     include_details: bool,
-    tail_noun: &str,
+    singular_tail_noun: &str,
+    plural_tail_noun: &str,
 ) -> bool {
     let relevant_outcomes: Vec<_> = outcomes
         .iter()
@@ -565,6 +576,8 @@ fn append_non_passing_outcomes(
 
     let omitted = relevant_outcomes.len().saturating_sub(limit);
     if omitted > 0 {
+        let tail_noun =
+            if omitted == 1 { singular_tail_noun } else { plural_tail_noun };
         let _ = write!(message, "\n    - ... and {omitted} more {tail_noun}");
         true
     } else {
@@ -621,7 +634,7 @@ mod tests {
         let error = check_risk_errors(&crates, &config, false, true, false).unwrap_err();
         let message = error.to_string();
         assert!(message.contains("1 crate was appraised as high risk and caused rejection"));
-        assert!(message.contains("- foo v1.0.0"));
+        assert!(message.contains("- foo v1.0.0: HIGH RISK (weighted score not calculated)"));
         assert!(message.contains("    - Sound Crate"));
         assert!(!message.contains("The crate is not flagged as unsound."));
         assert!(message.contains("[[allow_list]]"));
@@ -653,7 +666,7 @@ mod tests {
         let message = error.to_string();
 
         assert!(message.contains(
-            "- foo v1.0.0\n    - Policy Failure: The policy was not satisfied.\n    - \
+            "- foo v1.0.0: HIGH RISK (weighted score not calculated)\n    - Policy Failure: The policy was not satisfied.\n    - \
              Unavailable Facts (inconclusive): The policy could not be evaluated. \
              (failure to evaluate: service unavailable)"
         ));
@@ -729,7 +742,9 @@ mod tests {
         let error = check_risk_errors(&crates, &config, true, false, false).unwrap_err();
         let message = error.to_string();
 
-        assert!(message.contains("- foo v1.0.0\n    - Sound Crate"));
+        assert!(message.contains(
+            "- foo v1.0.0: HIGH RISK (weighted score not calculated)\n    - Sound Crate"
+        ));
         assert!(!message.contains("score 0"));
     }
 
@@ -848,10 +863,10 @@ mod tests {
 
         assert!(message.contains("Check 9"));
         assert!(!message.contains("Check 10"));
-        assert!(message.contains("... and 1 more required checks"));
+        assert!(message.contains("... and 1 more required check"));
         assert!(message.contains("- crate-19 v1.0.0"));
         assert!(!message.contains("- crate-20 v1.0.0"));
-        assert!(message.contains("... and 1 more rejected crates"));
+        assert!(message.contains("... and 1 more rejected crate"));
         assert!(message.contains(
             "Run with --console appraisal,reasons or write --json <path> for complete appraisal details."
         ));

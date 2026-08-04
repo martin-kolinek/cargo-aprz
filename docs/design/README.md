@@ -38,7 +38,8 @@ When `--error-if-high-risk` or `--error-if-medium-risk` rejects a run, the final
 error lists up to 20 non-allowed crates that caused the rejection and up to 10
 appraisal outcomes per crate, with omitted-item counts and instructions for
 requesting a complete console or JSON report. Required-gate rejections distinguish
-policy failures from inconclusive evaluations. When console appraisal reasons
+policy failures from inconclusive evaluations, identify the crate as high risk,
+and state that weighted scoring was not calculated. When console appraisal reasons
 are not rendered, including partial `--console` modes, the error includes
 descriptions and evaluation-failure reasons so it remains actionable as the
 command's only diagnostic. When the console already rendered appraisal reasons,
