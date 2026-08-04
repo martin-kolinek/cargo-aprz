@@ -144,7 +144,11 @@ pub fn format_appraisal_details_with_separator(appraisal: &Appraisal, separator:
 
     format!(
         "score = {:.0}, awarded points = {}, available points = {}",
-        appraisal.score, appraisal.awarded_points, appraisal.available_points,
+        appraisal
+            .weighted_score()
+            .expect("non-required appraisals have a weighted score"),
+        appraisal.awarded_points,
+        appraisal.available_points,
     )
 }
 

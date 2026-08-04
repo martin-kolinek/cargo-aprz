@@ -1,6 +1,6 @@
 use super::{ReportableCrate, common};
 use crate::Result;
-use crate::expr::{ExpressionDisposition, Risk};
+use crate::expr::{Appraisal, ExpressionDisposition, Risk};
 use crate::metrics::MetricCategory;
 use crate::reports::common::ReportContext;
 use chrono::{DateTime, Local};
@@ -45,7 +45,17 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], timestamp: DateTime<Local>
     let crates_by_risk = |risk: Risk| -> Vec<(&str, String, String, f64)> {
         let mut v: Vec<_> = crates.iter()
             .filter(|c| c.appraisal.as_ref().is_some_and(|a| a.risk == risk))
-            .map(|c| (c.name.as_ref(), c.version.to_string(), crate_description(c), c.appraisal.as_ref().map_or(0.0, |a| a.score)))
+            .map(|c| {
+                (
+                    c.name.as_ref(),
+                    c.version.to_string(),
+                    crate_description(c),
+                    c.appraisal
+                        .as_ref()
+                        .and_then(Appraisal::weighted_score)
+                        .unwrap_or(0.0),
+                )
+            })
             .collect();
         v.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(core::cmp::Ordering::Equal));
         v
@@ -486,7 +496,6 @@ fn write_risk_crate_list<W: Write>(writer: &mut W, class: &str, title: &str, cra
     writeln!(writer, "    <summary>{title}<span class=\"sort-controls\"><button type=\"button\" class=\"sort-btn\" onclick=\"sortCrates(this, 'alpha', event)\" title=\"Sort A\u{2013}Z\">A\u{2013}Z</button><button type=\"button\" class=\"sort-btn active\" onclick=\"sortCrates(this, 'score', event)\" title=\"Sort by score\">Score</button></span></summary>")?;
     writeln!(writer, "    <div class=\"crate-names\">")?;
     for (name, version, description, score) in crate_entries {
-        let score = score.max(0.0);
         let anchor = crate_anchor_id(name, version);
         let active = if *first_pill_emitted {
             ""
@@ -544,7 +553,11 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
             writeln!(
                 writer,
                 "          <span class=\"appraisal-score\">score {:.0} · {}/{} points</span>",
-                appraisal.score, appraisal.awarded_points, appraisal.available_points
+                appraisal
+                    .weighted_score()
+                    .expect("non-required appraisals have a weighted score"),
+                appraisal.awarded_points,
+                appraisal.available_points
             )?;
         }
         writeln!(writer, "          <span class=\"risk-badge {class}\">{label}</span>")?;
@@ -556,7 +569,7 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
     Ok(())
 }
 
-fn write_appraisal_table<W: Write>(writer: &mut W, appraisal: &crate::expr::Appraisal) -> Result<()> {
+fn write_appraisal_table<W: Write>(writer: &mut W, appraisal: &Appraisal) -> Result<()> {
     writeln!(writer, "          <table>")?;
     writeln!(writer, "          <thead><tr><th>Expression</th><th>Result</th><th>Details</th></tr></thead>")?;
     writeln!(writer, "          <tbody>")?;
@@ -899,6 +912,27 @@ mod tests {
 
         assert!(output.contains("1 required check failed · weighted score not calculated"));
         assert!(!output.contains("score 0"));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "Miri cannot call GetTimeZoneInformationForYear")]
+    fn test_required_check_failure_uses_normalized_sort_score() {
+        let required = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
+            "Sound Crate".into(),
+            "The crate is not flagged as unsound.".into(),
+            ExpressionDisposition::False,
+        )]);
+        let scored = Appraisal::new(Risk::Low, vec![], 1, 1, 100.0);
+        let crates = vec![
+            create_test_crate("event-listener", "5.4.1", Some(required)),
+            create_test_crate("scored", "1.0.0", Some(scored)),
+        ];
+        let mut output = String::new();
+
+        generate(&crates, test_timestamp(), &mut output).unwrap();
+
+        assert!(output.contains("data-name=\"event-listener\" data-score=\"0\""));
+        assert!(!output.contains("data-score=\"-0\""));
     }
 
     #[test]

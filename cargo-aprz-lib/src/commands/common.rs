@@ -3,7 +3,7 @@
 use super::ProgressReporter;
 use super::config::Config;
 use crate::Result;
-use crate::expr::{ExpressionDisposition, Risk, evaluate};
+use crate::expr::{ExpressionDisposition, ExpressionOutcome, Risk, evaluate};
 use crate::facts::{Collector, CrateFacts, CrateRef, ProviderResult};
 use crate::metrics::flatten;
 use crate::reports::ReportableCrate;
@@ -435,10 +435,6 @@ impl<'a, H: super::Host> Common<'a, H> {
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "Formatting bounded required and weighted rejection details is clearer in one flow"
-)]
 fn check_risk_errors(
     reportable_crates: &[ReportableCrate],
     config: &Config,
@@ -490,79 +486,25 @@ fn check_risk_errors(
         let _ = write!(message, "\n- {} v{}", crate_info.name, crate_info.version);
 
         if appraisal.is_required_check_failure() {
-            let relevant_outcomes: Vec<_> = appraisal
-                .expression_outcomes
-                .iter()
-                .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
-                .collect();
-            for outcome in relevant_outcomes.iter().take(MAX_OUTCOMES_PER_CRATE) {
-                match &outcome.disposition {
-                    ExpressionDisposition::False => {
-                        let _ = write!(message, "\n    - {}", outcome.name);
-                        if include_check_details {
-                            let _ = write!(
-                                message,
-                                ": {}",
-                                outcome.description
-                            );
-                        }
-                    }
-                    ExpressionDisposition::Failed(reason) => {
-                        let _ = write!(message, "\n    - {} (inconclusive)", outcome.name);
-                        if include_check_details {
-                            let _ = write!(
-                                message,
-                                ": {} (failure to evaluate: {reason})",
-                                outcome.description
-                            );
-                        }
-                    }
-                    ExpressionDisposition::True => {}
-                }
-            }
-            if relevant_outcomes.len() > MAX_OUTCOMES_PER_CRATE {
-                details_were_capped = true;
-                let _ = write!(
-                    message,
-                    "\n    - ... and {} more required checks",
-                    relevant_outcomes.len() - MAX_OUTCOMES_PER_CRATE
-                );
-            }
+            details_were_capped |= append_non_passing_outcomes(
+                &mut message,
+                &appraisal.expression_outcomes,
+                MAX_OUTCOMES_PER_CRATE,
+                include_check_details,
+                "required checks",
+            );
         } else {
-            let _ = write!(message, ": {} (score {:.0})", appraisal.risk, appraisal.score);
+            let score =
+                appraisal.weighted_score().expect("non-required appraisals have a weighted score");
+            let _ = write!(message, ": {} (score {score:.0})", appraisal.risk);
             if include_check_details {
-                let relevant_outcomes: Vec<_> = appraisal
-                    .expression_outcomes
-                    .iter()
-                    .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
-                    .collect();
-                for outcome in relevant_outcomes.iter().take(MAX_OUTCOMES_PER_CRATE) {
-                    match &outcome.disposition {
-                        ExpressionDisposition::False => {
-                            let _ = write!(
-                                message,
-                                "\n    - {}: {}",
-                                outcome.name, outcome.description
-                            );
-                        }
-                        ExpressionDisposition::Failed(reason) => {
-                            let _ = write!(
-                                message,
-                                "\n    - {} (inconclusive): {} (failure to evaluate: {reason})",
-                                outcome.name, outcome.description
-                            );
-                        }
-                        ExpressionDisposition::True => {}
-                    }
-                }
-                if relevant_outcomes.len() > MAX_OUTCOMES_PER_CRATE {
-                    details_were_capped = true;
-                    let _ = write!(
-                        message,
-                        "\n    - ... and {} more non-passing outcomes",
-                        relevant_outcomes.len() - MAX_OUTCOMES_PER_CRATE
-                    );
-                }
+                details_were_capped |= append_non_passing_outcomes(
+                    &mut message,
+                    &appraisal.expression_outcomes,
+                    MAX_OUTCOMES_PER_CRATE,
+                    true,
+                    "non-passing outcomes",
+                );
             }
         }
     }
@@ -585,6 +527,49 @@ fn check_risk_errors(
     );
 
     Err(ohno::AppError::new(message))
+}
+
+fn append_non_passing_outcomes(
+    message: &mut String,
+    outcomes: &[ExpressionOutcome],
+    limit: usize,
+    include_details: bool,
+    tail_noun: &str,
+) -> bool {
+    let relevant_outcomes: Vec<_> = outcomes
+        .iter()
+        .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
+        .collect();
+
+    for outcome in relevant_outcomes.iter().take(limit) {
+        match &outcome.disposition {
+            ExpressionDisposition::False => {
+                let _ = write!(message, "\n    - {}", outcome.name);
+                if include_details {
+                    let _ = write!(message, ": {}", outcome.description);
+                }
+            }
+            ExpressionDisposition::Failed(reason) => {
+                let _ = write!(message, "\n    - {} (inconclusive)", outcome.name);
+                if include_details {
+                    let _ = write!(
+                        message,
+                        ": {} (failure to evaluate: {reason})",
+                        outcome.description
+                    );
+                }
+            }
+            ExpressionDisposition::True => {}
+        }
+    }
+
+    let omitted = relevant_outcomes.len().saturating_sub(limit);
+    if omitted > 0 {
+        let _ = write!(message, "\n    - ... and {omitted} more {tail_noun}");
+        true
+    } else {
+        false
+    }
 }
 
 fn should_include_rejection_details(console_mode: Option<&ConsoleOutputMode>) -> bool {
@@ -667,9 +652,9 @@ mod tests {
             check_risk_errors(&crates, &Config::default(), false, true, true).unwrap_err();
         let message = error.to_string();
 
-        assert!(message.contains("Policy Failure: The policy was not satisfied."));
         assert!(message.contains(
-            "Unavailable Facts (inconclusive): The policy could not be evaluated. \
+            "- foo v1.0.0\n    - Policy Failure: The policy was not satisfied.\n    - \
+             Unavailable Facts (inconclusive): The policy could not be evaluated. \
              (failure to evaluate: service unavailable)"
         ));
     }

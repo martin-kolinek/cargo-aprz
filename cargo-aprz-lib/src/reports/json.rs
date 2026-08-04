@@ -30,11 +30,9 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
                 "required_check_failure".into(),
                 json!(appraisal.is_required_check_failure()),
             );
-            let score_was_calculated = !appraisal.is_required_check_failure();
-            eval_obj.insert(
-                "score".into(),
-                score_was_calculated.then_some(appraisal.score).into(),
-            );
+            let weighted_score = appraisal.weighted_score();
+            let score_was_calculated = weighted_score.is_some();
+            eval_obj.insert("score".into(), weighted_score.into());
             eval_obj.insert(
                 "awarded_points".into(),
                 score_was_calculated.then_some(appraisal.awarded_points).into(),

@@ -16,10 +16,10 @@ results include both the configured check name and description so users can
 understand what the policy requires. Passing results remain name-only to keep
 output concise.
 
-Required-gate state is created only by the required-check constructor and queried
-through `is_required_check_failure`; it is not inferred from thresholds or point
-totals. This preserves the existing public `Appraisal` struct shape while keeping
-report classification independent of scoring configuration.
+Required-gate state is encoded separately from threshold and point totals while
+preserving the existing public `Appraisal` struct shape. Production consumers use
+`weighted_score`, which returns no score when a required gate skipped weighted
+evaluation; raw score storage is retained only for struct-literal compatibility.
 
 CSV reports neutralize textual metric cells whose first non-whitespace character
 is a spreadsheet formula marker (`=`, `+`, `-`, or `@`) by prefixing an

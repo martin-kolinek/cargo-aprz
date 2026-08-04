@@ -7,6 +7,8 @@ pub struct Appraisal {
     pub expression_outcomes: Vec<ExpressionOutcome>,
     pub available_points: u32,
     pub awarded_points: u32,
+    /// Raw weighted score storage. Use [`Self::weighted_score`] to account for
+    /// required gates that skip weighted scoring.
     pub score: f64,
 }
 
@@ -51,6 +53,16 @@ impl Appraisal {
     pub const fn is_required_check_failure(&self) -> bool {
         self.score.is_sign_negative()
     }
+
+    /// Returns the weighted score, or `None` when a required gate skipped scoring.
+    #[must_use]
+    pub const fn weighted_score(&self) -> Option<f64> {
+        if self.is_required_check_failure() {
+            None
+        } else {
+            Some(self.score)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -67,6 +79,7 @@ mod tests {
         )]);
 
         assert!(appraisal.is_required_check_failure());
+        assert_eq!(appraisal.weighted_score(), None);
         assert_eq!(appraisal.score.to_bits(), (-0.0_f64).to_bits());
     }
 
@@ -85,5 +98,6 @@ mod tests {
         );
 
         assert!(!appraisal.is_required_check_failure());
+        assert_eq!(appraisal.weighted_score(), Some(0.0));
     }
 }
