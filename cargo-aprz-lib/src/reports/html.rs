@@ -486,6 +486,7 @@ fn write_risk_crate_list<W: Write>(writer: &mut W, class: &str, title: &str, cra
     writeln!(writer, "    <summary>{title}<span class=\"sort-controls\"><button type=\"button\" class=\"sort-btn\" onclick=\"sortCrates(this, 'alpha', event)\" title=\"Sort A\u{2013}Z\">A\u{2013}Z</button><button type=\"button\" class=\"sort-btn active\" onclick=\"sortCrates(this, 'score', event)\" title=\"Sort by score\">Score</button></span></summary>")?;
     writeln!(writer, "    <div class=\"crate-names\">")?;
     for (name, version, description, score) in crate_entries {
+        let score = score.max(0.0);
         let anchor = crate_anchor_id(name, version);
         let active = if *first_pill_emitted {
             ""
@@ -535,7 +536,9 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
             writeln!(
                 writer,
                 "          <span class=\"appraisal-score\">{}</span>",
-                common::format_appraisal_details(appraisal).replace("; ", " · ")
+                html_escape(&common::format_appraisal_details_with_separator(
+                    appraisal, " · "
+                ))
             )?;
         } else {
             writeln!(

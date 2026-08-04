@@ -428,13 +428,17 @@ impl<'a, H: super::Host> Common<'a, H> {
             &self.config,
             self.error_if_medium_risk,
             self.error_if_high_risk,
-            console_mode.is_none(),
+            should_include_rejection_details(console_mode),
         )?;
 
         Ok(())
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "Formatting bounded required and weighted rejection details is clearer in one flow"
+)]
 fn check_risk_errors(
     reportable_crates: &[ReportableCrate],
     config: &Config,
@@ -443,7 +447,7 @@ fn check_risk_errors(
     include_check_details: bool,
 ) -> Result<()> {
     const MAX_REJECTED_CRATES: usize = 20;
-    const MAX_REQUIRED_CHECKS: usize = 10;
+    const MAX_OUTCOMES_PER_CRATE: usize = 10;
 
     let rejected_risks: fn(Risk) -> bool = if error_if_medium_risk {
         |risk| matches!(risk, Risk::Medium | Risk::High)
@@ -480,6 +484,7 @@ fn check_risk_errors(
         if rejected.len() == 1 { "was" } else { "were" }
     );
 
+    let mut details_were_capped = rejected.len() > MAX_REJECTED_CRATES;
     for crate_info in rejected.iter().take(MAX_REJECTED_CRATES) {
         let appraisal = crate_info.appraisal.as_ref().expect("rejected crates have an appraisal");
         let _ = write!(message, "\n- {} v{}", crate_info.name, crate_info.version);
@@ -490,12 +495,16 @@ fn check_risk_errors(
                 .iter()
                 .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
                 .collect();
-            for outcome in relevant_outcomes.iter().take(MAX_REQUIRED_CHECKS) {
+            for outcome in relevant_outcomes.iter().take(MAX_OUTCOMES_PER_CRATE) {
                 match &outcome.disposition {
                     ExpressionDisposition::False => {
                         let _ = write!(message, "\n    - {}", outcome.name);
                         if include_check_details {
-                            let _ = write!(message, ": {}", outcome.description);
+                            let _ = write!(
+                                message,
+                                ": {}",
+                                outcome.description
+                            );
                         }
                     }
                     ExpressionDisposition::Failed(reason) => {
@@ -511,15 +520,50 @@ fn check_risk_errors(
                     ExpressionDisposition::True => {}
                 }
             }
-            if relevant_outcomes.len() > MAX_REQUIRED_CHECKS {
+            if relevant_outcomes.len() > MAX_OUTCOMES_PER_CRATE {
+                details_were_capped = true;
                 let _ = write!(
                     message,
                     "\n    - ... and {} more required checks",
-                    relevant_outcomes.len() - MAX_REQUIRED_CHECKS
+                    relevant_outcomes.len() - MAX_OUTCOMES_PER_CRATE
                 );
             }
         } else {
             let _ = write!(message, ": {} (score {:.0})", appraisal.risk, appraisal.score);
+            if include_check_details {
+                let relevant_outcomes: Vec<_> = appraisal
+                    .expression_outcomes
+                    .iter()
+                    .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
+                    .collect();
+                for outcome in relevant_outcomes.iter().take(MAX_OUTCOMES_PER_CRATE) {
+                    match &outcome.disposition {
+                        ExpressionDisposition::False => {
+                            let _ = write!(
+                                message,
+                                "\n    - {}: {}",
+                                outcome.name, outcome.description
+                            );
+                        }
+                        ExpressionDisposition::Failed(reason) => {
+                            let _ = write!(
+                                message,
+                                "\n    - {} (inconclusive): {} (failure to evaluate: {reason})",
+                                outcome.name, outcome.description
+                            );
+                        }
+                        ExpressionDisposition::True => {}
+                    }
+                }
+                if relevant_outcomes.len() > MAX_OUTCOMES_PER_CRATE {
+                    details_were_capped = true;
+                    let _ = write!(
+                        message,
+                        "\n    - ... and {} more non-passing outcomes",
+                        relevant_outcomes.len() - MAX_OUTCOMES_PER_CRATE
+                    );
+                }
+            }
         }
     }
     if rejected.len() > MAX_REJECTED_CRATES {
@@ -529,6 +573,11 @@ fn check_risk_errors(
             rejected.len() - MAX_REJECTED_CRATES
         );
     }
+    if include_check_details && details_were_capped {
+        message.push_str(
+            "\nRun with --console appraisal,reasons or write --json <path> for complete appraisal details.",
+        );
+    }
 
     message.push_str(
         "\nReview the failed checks and remediate, upgrade, or replace the affected dependencies. \
@@ -536,6 +585,10 @@ fn check_risk_errors(
     );
 
     Err(ohno::AppError::new(message))
+}
+
+fn should_include_rejection_details(console_mode: Option<&ConsoleOutputMode>) -> bool {
+    console_mode.is_none_or(|mode| !(mode.appraisal && mode.reasons))
 }
 
 #[cfg(test)]
@@ -619,6 +672,47 @@ mod tests {
             "Unavailable Facts (inconclusive): The policy could not be evaluated. \
              (failure to evaluate: service unavailable)"
         ));
+    }
+
+    #[test]
+    fn test_partial_console_modes_include_rejection_details() {
+        let metrics_only =
+            ConsoleOutputMode { appraisal: false, reasons: false, metrics: true };
+        let full = ConsoleOutputMode::full();
+
+        assert!(should_include_rejection_details(None));
+        assert!(should_include_rejection_details(Some(&metrics_only)));
+        assert!(!should_include_rejection_details(Some(&full)));
+    }
+
+    #[test]
+    fn test_check_risk_errors_includes_weighted_outcomes_when_details_are_needed() {
+        let appraisal = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
+                "Maintained".into(),
+                "The crate was recently maintained.".into(),
+                ExpressionDisposition::False,
+            )],
+            10,
+            2,
+            20.0,
+        );
+        let crates = vec![ReportableCrate::new(
+            "foo".into(),
+            Arc::new(Version::new(1, 0, 0)),
+            vec![],
+            Some(appraisal),
+        )];
+
+        let error =
+            check_risk_errors(&crates, &Config::default(), false, true, true).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("Maintained: The crate was recently maintained.")
+        );
     }
 
     #[test]
@@ -764,7 +858,7 @@ mod tests {
             .collect();
 
         let error =
-            check_risk_errors(&crates, &Config::default(), false, true, false).unwrap_err();
+            check_risk_errors(&crates, &Config::default(), false, true, true).unwrap_err();
         let message = error.to_string();
 
         assert!(message.contains("Check 9"));
@@ -773,5 +867,8 @@ mod tests {
         assert!(message.contains("- crate-19 v1.0.0"));
         assert!(!message.contains("- crate-20 v1.0.0"));
         assert!(message.contains("... and 1 more rejected crates"));
+        assert!(message.contains(
+            "Run with --console appraisal,reasons or write --json <path> for complete appraisal details."
+        ));
     }
 }

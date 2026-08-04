@@ -119,9 +119,15 @@ pub fn required_check_counts(appraisal: &Appraisal) -> (usize, usize) {
 
 /// Format the details of an appraisal without its risk label.
 pub fn format_appraisal_details(appraisal: &Appraisal) -> String {
+    format_appraisal_details_with_separator(appraisal, "; ")
+}
+
+/// Format appraisal details using the requested separator before skipped-score text.
+pub fn format_appraisal_details_with_separator(appraisal: &Appraisal, separator: &str) -> String {
     if appraisal.is_required_check_failure() {
         let (failed, inconclusive) = required_check_counts(appraisal);
         let summary = match (failed, inconclusive) {
+            (0, 0) => "required check failed (details unavailable)".to_string(),
             (0, 1) => "1 required check inconclusive".to_string(),
             (0, count) => format!("{count} required checks inconclusive"),
             (1, 0) => "1 required check failed".to_string(),
@@ -133,7 +139,7 @@ pub fn format_appraisal_details(appraisal: &Appraisal) -> String {
                 format!("{failed} required checks failed, {inconclusive} inconclusive")
             }
         };
-        return format!("{summary}; weighted score not calculated");
+        return format!("{summary}{separator}weighted score not calculated");
     }
 
     format!(
@@ -437,6 +443,30 @@ mod tests {
         assert_eq!(
             format_appraisal_details(&appraisal),
             "score = 20, awarded points = 2, available points = 10"
+        );
+    }
+
+    #[test]
+    fn test_format_appraisal_details_supports_custom_separator() {
+        let appraisal = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
+            "Required".into(),
+            "Required policy".into(),
+            ExpressionDisposition::False,
+        )]);
+
+        assert_eq!(
+            format_appraisal_details_with_separator(&appraisal, " · "),
+            "1 required check failed · weighted score not calculated"
+        );
+    }
+
+    #[test]
+    fn test_format_appraisal_details_handles_missing_failure_outcome() {
+        let appraisal = Appraisal::new(Risk::High, vec![], 0, 0, -0.0);
+
+        assert_eq!(
+            format_appraisal_details(&appraisal),
+            "required check failed (details unavailable); weighted score not calculated"
         );
     }
 

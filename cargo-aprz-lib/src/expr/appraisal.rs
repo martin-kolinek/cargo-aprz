@@ -41,18 +41,49 @@ impl Appraisal {
             expression_outcomes,
             available_points: 0,
             awarded_points: 0,
-            score: 0.0,
+            // Weighted scores are always non-negative. Negative zero preserves
+            // numeric compatibility while recording that scoring was skipped.
+            score: -0.0,
         }
     }
 
     #[must_use]
-    pub fn is_required_check_failure(&self) -> bool {
-        self.risk == Risk::High
-            && self.available_points == 0
-            && self.awarded_points == 0
-            && self
-                .expression_outcomes
-                .iter()
-                .any(|outcome| !matches!(outcome.disposition, super::ExpressionDisposition::True))
+    pub const fn is_required_check_failure(&self) -> bool {
+        self.score.is_sign_negative()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::expr::ExpressionDisposition;
+
+    #[test]
+    fn test_required_check_failure_records_explicit_state_without_changing_numeric_score() {
+        let appraisal = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
+            "Required".into(),
+            "Required policy".into(),
+            ExpressionDisposition::False,
+        )]);
+
+        assert!(appraisal.is_required_check_failure());
+        assert_eq!(appraisal.score.to_bits(), (-0.0_f64).to_bits());
+    }
+
+    #[test]
+    fn test_zero_point_appraisal_is_not_a_required_check_failure() {
+        let appraisal = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
+                "Weighted".into(),
+                "Weighted policy".into(),
+                ExpressionDisposition::False,
+            )],
+            0,
+            0,
+            0.0,
+        );
+
+        assert!(!appraisal.is_required_check_failure());
     }
 }

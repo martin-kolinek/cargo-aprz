@@ -30,23 +30,33 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
                 "required_check_failure".into(),
                 json!(appraisal.is_required_check_failure()),
             );
+            let score_was_calculated = !appraisal.is_required_check_failure();
             eval_obj.insert(
                 "score".into(),
-                if appraisal.is_required_check_failure() {
-                    serde_json::Value::Null
-                } else {
-                    json!(appraisal.score)
-                },
+                score_was_calculated.then_some(appraisal.score).into(),
             );
-            eval_obj.insert("awarded_points".into(), json!(appraisal.awarded_points));
-            eval_obj.insert("available_points".into(), json!(appraisal.available_points));
+            eval_obj.insert(
+                "awarded_points".into(),
+                score_was_calculated.then_some(appraisal.awarded_points).into(),
+            );
+            eval_obj.insert(
+                "available_points".into(),
+                score_was_calculated.then_some(appraisal.available_points).into(),
+            );
             eval_obj.insert(
                 "reasons".into(),
                 json!(
                     appraisal
                         .expression_outcomes
                         .iter()
-                        .map(|outcome| outcome.name.to_string())
+                        .map(|outcome| match &outcome.disposition {
+                            ExpressionDisposition::Failed(reason) => {
+                                format!("{} (failure to evaluate: {reason})", outcome.name)
+                            }
+                            ExpressionDisposition::True | ExpressionDisposition::False => {
+                                outcome.name.to_string()
+                            }
+                        })
                         .collect::<Vec<_>>()
                 ),
             );
@@ -271,6 +281,12 @@ mod tests {
         let appraisal = &parsed["crates"][0]["appraisal"];
         assert_eq!(appraisal["required_check_failure"], true);
         assert!(appraisal["score"].is_null());
+        assert!(appraisal["awarded_points"].is_null());
+        assert!(appraisal["available_points"].is_null());
+        assert_eq!(
+            appraisal["reasons"][0],
+            "facts (failure to evaluate: service unavailable)"
+        );
         assert_eq!(appraisal["outcomes"][0]["disposition"], "inconclusive");
         assert_eq!(
             appraisal["outcomes"][0]["failure_reason"],

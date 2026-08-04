@@ -7,9 +7,13 @@
 - Updated dependencies
 - Explain required-check failures without displaying a misleading zero-out-of-zero score
 - Include policy descriptions in expression output and list blocking crates in risk-check errors
-- Neutralize formula-like textual metric values in CSV reports
+- Neutralize formula-like textual metric values in CSV reports; this prefixes
+  an apostrophe for any text whose first non-whitespace character is `=`, `+`,
+  `-`, or `@`, including benign dash-prefixed descriptions
 - Flat report reasons now include descriptions for failed or inconclusive checks; passing-check output remains name-only
-- JSON appraisal output adds structured risk, score, point, required-check, and expression-outcome fields while preserving name-only `reasons`
+- JSON appraisal output adds structured risk, nullable score/point, required-check,
+  and expression-outcome fields while preserving legacy `reasons`, including
+  evaluation-failure diagnostics
 - Risk-check errors include full required-check diagnostics when console output is suppressed and distinguish inconclusive evaluations from policy failures
 
 ### Performance

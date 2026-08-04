@@ -16,6 +16,11 @@ results include both the configured check name and description so users can
 understand what the policy requires. Passing results remain name-only to keep
 output concise.
 
+Required-gate state is created only by the required-check constructor and queried
+through `is_required_check_failure`; it is not inferred from thresholds or point
+totals. This preserves the existing public `Appraisal` struct shape while keeping
+report classification independent of scoring configuration.
+
 CSV reports neutralize textual metric cells whose first non-whitespace character
 is a spreadsheet formula marker (`=`, `+`, `-`, or `@`) by prefixing an
 apostrophe. This includes formulas hidden behind spaces, tabs, or line breaks.
@@ -23,20 +28,24 @@ Numeric metric values remain numeric so spreadsheet consumers can continue to
 sort and calculate with them. Excel reports use string cells for textual values,
 which prevents them from being interpreted as formulas.
 
-JSON preserves the legacy `result` and name-only `reasons` fields while exposing
-structured risk, score, point, required-check, and per-expression outcome fields.
-Consumers should use the structured fields rather than parsing display strings.
+JSON preserves the legacy `result` and `reasons` fields, including the
+`failure to evaluate` suffix for inconclusive reasons, while exposing structured
+risk, score, point, required-check, and per-expression outcome fields. Score and
+point fields are null when a required gate prevents weighted scoring. Consumers
+should use the structured fields rather than parsing display strings.
 
 When `--error-if-high-risk` or `--error-if-medium-risk` rejects a run, the final
 error lists up to 20 non-allowed crates that caused the rejection and up to 10
-blocking required checks per crate, with omitted-item counts. Required-gate
-rejections distinguish policy failures from inconclusive evaluations.
-When console output is suppressed, the error includes descriptions and
-evaluation-failure reasons so it remains actionable as the command's only
-terminal output. When console output is present, the error remains concise to
-avoid repeating those details. Score-based rejections use a consistent
-risk-and-score format rather than listing every weighted expression. The error
-directs users to remediate, upgrade, or replace the dependency.
+appraisal outcomes per crate, with omitted-item counts and instructions for
+requesting a complete console or JSON report. Required-gate rejections distinguish
+policy failures from inconclusive evaluations. When console appraisal reasons
+are not rendered, including partial `--console` modes, the error includes
+descriptions and evaluation-failure reasons so it remains actionable as the
+command's only diagnostic. When the console already rendered appraisal reasons,
+the error remains concise to avoid repeating those details. Score-based
+rejections use a consistent risk-and-score format and include bounded non-passing
+weighted outcomes when the console omitted them. The error directs users to
+remediate, upgrade, or replace the dependency.
 If a temporary policy exception is appropriate, users can add an exact crate
 version to `[[allow_list]]`; allowed crates remain visible in reports but do not
 fail the command.
