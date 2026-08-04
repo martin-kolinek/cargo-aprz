@@ -101,29 +101,39 @@ pub const fn format_risk_status(risk: Risk) -> &'static str {
     }
 }
 
-/// Return the number of failed required checks when weighted scoring was skipped.
-pub fn failed_required_check_count(appraisal: &Appraisal) -> usize {
-    if !appraisal.required_check_failure {
-        return 0;
+/// Return policy-failure and inconclusive counts when weighted scoring was skipped.
+pub fn required_check_counts(appraisal: &Appraisal) -> (usize, usize) {
+    if !appraisal.is_required_check_failure() {
+        return (0, 0);
     }
 
     appraisal
         .expression_outcomes
         .iter()
-        .filter(|outcome| matches!(outcome.disposition, ExpressionDisposition::False | ExpressionDisposition::Failed(_)))
-        .count()
+        .fold((0, 0), |(failed, inconclusive), outcome| match outcome.disposition {
+            ExpressionDisposition::False => (failed + 1, inconclusive),
+            ExpressionDisposition::Failed(_) => (failed, inconclusive + 1),
+            ExpressionDisposition::True => (failed, inconclusive),
+        })
 }
 
 /// Format the details of an appraisal without its risk label.
 pub fn format_appraisal_details(appraisal: &Appraisal) -> String {
-    let failed_required_checks = failed_required_check_count(appraisal);
-    if failed_required_checks > 0 {
-        let noun = if failed_required_checks == 1 {
-            "required check failed"
-        } else {
-            "required checks failed"
+    if appraisal.is_required_check_failure() {
+        let (failed, inconclusive) = required_check_counts(appraisal);
+        let summary = match (failed, inconclusive) {
+            (0, 1) => "1 required check inconclusive".to_string(),
+            (0, count) => format!("{count} required checks inconclusive"),
+            (1, 0) => "1 required check failed".to_string(),
+            (count, 0) => format!("{count} required checks failed"),
+            (1, inconclusive) => {
+                format!("1 required check failed, {inconclusive} inconclusive")
+            }
+            (failed, inconclusive) => {
+                format!("{failed} required checks failed, {inconclusive} inconclusive")
+            }
         };
-        return format!("{failed_required_checks} {noun}; weighted score not calculated");
+        return format!("{summary}; weighted score not calculated");
     }
 
     format!(
@@ -383,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn test_failed_required_check_count_counts_false_and_failed_outcomes() {
+    fn test_required_check_counts_distinguish_failures_and_inconclusive_outcomes() {
         let appraisal = Appraisal::required_check_failure(vec![
             ExpressionOutcome::new(
                 "Pass".into(),
@@ -402,15 +412,15 @@ mod tests {
             ),
         ]);
 
-        assert_eq!(failed_required_check_count(&appraisal), 2);
+        assert_eq!(required_check_counts(&appraisal), (1, 1));
         assert_eq!(
             format_appraisal_details(&appraisal),
-            "2 required checks failed; weighted score not calculated"
+            "1 required check failed, 1 inconclusive; weighted score not calculated"
         );
     }
 
     #[test]
-    fn test_failed_required_check_count_ignores_weighted_outcomes() {
+    fn test_required_check_counts_ignore_weighted_outcomes() {
         let appraisal = Appraisal::new(
             Risk::High,
             vec![ExpressionOutcome::new(
@@ -423,7 +433,7 @@ mod tests {
             20.0,
         );
 
-        assert_eq!(failed_required_check_count(&appraisal), 0);
+        assert_eq!(required_check_counts(&appraisal), (0, 0));
         assert_eq!(
             format_appraisal_details(&appraisal),
             "score = 20, awarded points = 2, available points = 10"

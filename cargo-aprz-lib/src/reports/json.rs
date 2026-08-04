@@ -1,6 +1,6 @@
 use super::{ReportableCrate, common};
 use crate::Result;
-use crate::expr::ExpressionDisposition;
+use crate::expr::{ExpressionDisposition, Risk};
 use crate::metrics::MetricValue;
 use core::fmt::Write;
 use serde_json::json;
@@ -18,20 +18,62 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
         if let Some(appraisal) = &crate_info.appraisal {
             let mut eval_obj = serde_json::Map::new();
             eval_obj.insert("result".into(), json!(common::format_appraisal_status(appraisal)));
-            eval_obj.insert("reasons".into(), json!(appraisal.expression_outcomes.iter()
-                .map(|o| {
-                    match &o.disposition {
-                        ExpressionDisposition::True => o.name.to_string(),
-                        ExpressionDisposition::False => {
-                            format!("{}: {}", o.name, o.description)
-                        }
-                        ExpressionDisposition::Failed(reason) => format!(
-                            "{}: {} (failure to evaluate: {reason})",
-                            o.name, o.description
-                        ),
-                    }
-                })
-                .collect::<Vec<_>>()));
+            eval_obj.insert(
+                "risk".into(),
+                json!(match appraisal.risk {
+                    Risk::Low => "low",
+                    Risk::Medium => "medium",
+                    Risk::High => "high",
+                }),
+            );
+            eval_obj.insert(
+                "required_check_failure".into(),
+                json!(appraisal.is_required_check_failure()),
+            );
+            eval_obj.insert(
+                "score".into(),
+                if appraisal.is_required_check_failure() {
+                    serde_json::Value::Null
+                } else {
+                    json!(appraisal.score)
+                },
+            );
+            eval_obj.insert("awarded_points".into(), json!(appraisal.awarded_points));
+            eval_obj.insert("available_points".into(), json!(appraisal.available_points));
+            eval_obj.insert(
+                "reasons".into(),
+                json!(
+                    appraisal
+                        .expression_outcomes
+                        .iter()
+                        .map(|outcome| outcome.name.to_string())
+                        .collect::<Vec<_>>()
+                ),
+            );
+            eval_obj.insert(
+                "outcomes".into(),
+                json!(
+                    appraisal
+                        .expression_outcomes
+                        .iter()
+                        .map(|outcome| {
+                            let (disposition, failure_reason) = match &outcome.disposition {
+                                ExpressionDisposition::True => ("passed", None),
+                                ExpressionDisposition::False => ("failed", None),
+                                ExpressionDisposition::Failed(reason) => {
+                                    ("inconclusive", Some(reason.as_str()))
+                                }
+                            };
+                            json!({
+                                "name": outcome.name,
+                                "description": outcome.description,
+                                "disposition": disposition,
+                                "failure_reason": failure_reason,
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                ),
+            );
             crate_obj.insert("appraisal".into(), json!(eval_obj));
         }
 
@@ -162,7 +204,6 @@ mod tests {
     fn test_generate_single_crate_with_evaluation() {
         let eval = Appraisal {
             risk: Risk::Low,
-            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True)],
             available_points: 1,
             awarded_points: 1,
@@ -175,6 +216,9 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(parsed["crates"][0]["appraisal"]["result"], "LOW RISK (score = 100, awarded points = 1, available points = 1)");
         assert_eq!(parsed["crates"][0]["appraisal"]["reasons"][0], "good");
+        assert_eq!(parsed["crates"][0]["appraisal"]["risk"], "low");
+        assert_eq!(parsed["crates"][0]["appraisal"]["score"], 100.0);
+        assert_eq!(parsed["crates"][0]["appraisal"]["outcomes"][0]["disposition"], "passed");
     }
 
     #[test]
@@ -196,7 +240,6 @@ mod tests {
     fn test_generate_denied_status() {
         let eval = Appraisal {
             risk: Risk::High,
-            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
             available_points: 1,
             awarded_points: 0,
@@ -208,6 +251,31 @@ mod tests {
         result.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(parsed["crates"][0]["appraisal"]["result"], "HIGH RISK (score = 0, awarded points = 0, available points = 1)");
+        assert_eq!(parsed["crates"][0]["appraisal"]["outcomes"][0]["description"], "Security issue");
+        assert_eq!(parsed["crates"][0]["appraisal"]["outcomes"][0]["disposition"], "failed");
+    }
+
+    #[test]
+    fn test_generate_required_check_failure_has_null_score_and_failure_reason() {
+        let eval = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
+            "facts".into(),
+            "Facts must be available.".into(),
+            ExpressionDisposition::Failed("service unavailable".into()),
+        )]);
+        let crates = vec![create_test_crate("bad_crate", "1.0.0", Some(eval))];
+        let mut output = String::new();
+
+        generate(&crates, &mut output).unwrap();
+
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+        let appraisal = &parsed["crates"][0]["appraisal"];
+        assert_eq!(appraisal["required_check_failure"], true);
+        assert!(appraisal["score"].is_null());
+        assert_eq!(appraisal["outcomes"][0]["disposition"], "inconclusive");
+        assert_eq!(
+            appraisal["outcomes"][0]["failure_reason"],
+            "service unavailable"
+        );
     }
 
     #[test]

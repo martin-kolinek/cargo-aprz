@@ -18,7 +18,7 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
         write!(
             writer,
             ",{}",
-            escape_csv_untrusted(&format!("{} v{}", crate_info.name, crate_info.version))
+            escape_csv(&format!("{} v{}", crate_info.name, crate_info.version))
         )?;
     }
     writeln!(writer)?;
@@ -42,7 +42,7 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
             if let Some(appraisal) = &crate_info.appraisal {
                 let reasons = common::join_with(
                     appraisal.expression_outcomes.iter().map(common::outcome_icon_name), "; ");
-                write!(writer, ",{}", escape_csv_untrusted(&reasons))?;
+                write!(writer, ",{}", escape_csv(&reasons))?;
             } else {
                 write!(writer, ",")?;
             }
@@ -86,7 +86,7 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
 fn is_textual_metric_value(value: &MetricValue) -> bool {
     match value {
         MetricValue::String(_) => true,
-        MetricValue::List(values) => values.first().is_some_and(is_textual_metric_value),
+        MetricValue::List(values) => values.iter().any(is_textual_metric_value),
         MetricValue::UInt(_) | MetricValue::Float(_) | MetricValue::Boolean(_) | MetricValue::DateTime(_) => false,
     }
 }
@@ -146,6 +146,14 @@ mod tests {
     static VERSION_DEF: MetricDef = MetricDef {
         name: "version",
         description: "Crate version",
+        category: MetricCategory::Metadata,
+        extractor: |_| None,
+        default_value: || None,
+    };
+
+    static TEXT_DEF: MetricDef = MetricDef {
+        name: "text",
+        description: "Untrusted text",
         category: MetricCategory::Metadata,
         extractor: |_| None,
         default_value: || None,
@@ -232,6 +240,19 @@ mod tests {
     }
 
     #[test]
+    fn test_list_metric_is_textual_when_any_value_is_textual() {
+        assert!(is_textual_metric_value(&MetricValue::List(vec![
+            MetricValue::UInt(1),
+            MetricValue::String("=formula".into()),
+        ])));
+        assert!(!is_textual_metric_value(&MetricValue::List(vec![])));
+        assert!(!is_textual_metric_value(&MetricValue::List(vec![
+            MetricValue::UInt(1),
+            MetricValue::Float(2.0),
+        ])));
+    }
+
+    #[test]
     fn test_generate_empty_crates() {
         let crates: Vec<ReportableCrate> = vec![];
         let mut output = String::new();
@@ -255,10 +276,27 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_neutralizes_formula_in_textual_metric() {
+        let crate_info = ReportableCrate::new(
+            "test_crate".into(),
+            Arc::new("1.0.0".parse().unwrap()),
+            vec![Metric::with_value(
+                &TEXT_DEF,
+                MetricValue::String("=HYPERLINK(\"https://example.invalid\")".into()),
+            )],
+            None,
+        );
+        let mut output = String::new();
+
+        generate(&[crate_info], &mut output).unwrap();
+
+        assert!(output.contains("text,\"'=HYPERLINK(\"\"https://example.invalid\"\")\""));
+    }
+
+    #[test]
     fn test_generate_single_crate_with_evaluation() {
         let eval = Appraisal {
             risk: Risk::Low,
-            required_check_failure: false,
             expression_outcomes: vec![
                 ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True),
                 ExpressionOutcome::new("quality".into(), "Quality".into(), ExpressionDisposition::True),
@@ -276,10 +314,9 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_neutralizes_formula_in_expression_description() {
+    fn test_generate_escapes_expression_description_as_regular_csv_text() {
         let eval = Appraisal {
             risk: Risk::High,
-            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new(
                 "Policy".into(),
                 "=HYPERLINK(\"https://example.invalid\")".into(),
@@ -315,7 +352,6 @@ mod tests {
     fn test_generate_with_special_characters() {
         let eval = Appraisal {
             risk: Risk::Low,
-            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("quotes".into(), "Reason with \"quotes\"".into(), ExpressionDisposition::True)],
             available_points: 1,
             awarded_points: 1,
@@ -333,7 +369,6 @@ mod tests {
     fn test_generate_denied_status() {
         let eval = Appraisal {
             risk: Risk::High,
-            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
             available_points: 1,
             awarded_points: 0,

@@ -423,7 +423,13 @@ impl<'a, H: super::Host> Common<'a, H> {
 
         // If --error-if-medium-risk flag is set, return error if any non-allowed crate is medium or high risk
         // If --error-if-high-risk flag is set, return error if any non-allowed crate is high risk
-        check_risk_errors(&reportable_crates, &self.config, self.error_if_medium_risk, self.error_if_high_risk)?;
+        check_risk_errors(
+            &reportable_crates,
+            &self.config,
+            self.error_if_medium_risk,
+            self.error_if_high_risk,
+            console_mode.is_none(),
+        )?;
 
         Ok(())
     }
@@ -434,7 +440,11 @@ fn check_risk_errors(
     config: &Config,
     error_if_medium_risk: bool,
     error_if_high_risk: bool,
+    include_check_details: bool,
 ) -> Result<()> {
+    const MAX_REJECTED_CRATES: usize = 20;
+    const MAX_REQUIRED_CHECKS: usize = 10;
+
     let rejected_risks: fn(Risk) -> bool = if error_if_medium_risk {
         |risk| matches!(risk, Risk::Medium | Risk::High)
     } else if error_if_high_risk {
@@ -470,23 +480,54 @@ fn check_risk_errors(
         if rejected.len() == 1 { "was" } else { "were" }
     );
 
-    for crate_info in rejected {
+    for crate_info in rejected.iter().take(MAX_REJECTED_CRATES) {
         let appraisal = crate_info.appraisal.as_ref().expect("rejected crates have an appraisal");
         let _ = write!(message, "\n- {} v{}", crate_info.name, crate_info.version);
 
-        if appraisal.required_check_failure {
-            for outcome in appraisal
+        if appraisal.is_required_check_failure() {
+            let relevant_outcomes: Vec<_> = appraisal
                 .expression_outcomes
                 .iter()
                 .filter(|outcome| !matches!(outcome.disposition, ExpressionDisposition::True))
-            {
-                let _ = write!(message, "\n    - {}", outcome.name);
+                .collect();
+            for outcome in relevant_outcomes.iter().take(MAX_REQUIRED_CHECKS) {
+                match &outcome.disposition {
+                    ExpressionDisposition::False => {
+                        let _ = write!(message, "\n    - {}", outcome.name);
+                        if include_check_details {
+                            let _ = write!(message, ": {}", outcome.description);
+                        }
+                    }
+                    ExpressionDisposition::Failed(reason) => {
+                        let _ = write!(message, "\n    - {} (inconclusive)", outcome.name);
+                        if include_check_details {
+                            let _ = write!(
+                                message,
+                                ": {} (failure to evaluate: {reason})",
+                                outcome.description
+                            );
+                        }
+                    }
+                    ExpressionDisposition::True => {}
+                }
             }
-        } else if error_if_medium_risk {
-            let _ = write!(message, ": {} (score {:.0})", appraisal.risk, appraisal.score);
+            if relevant_outcomes.len() > MAX_REQUIRED_CHECKS {
+                let _ = write!(
+                    message,
+                    "\n    - ... and {} more required checks",
+                    relevant_outcomes.len() - MAX_REQUIRED_CHECKS
+                );
+            }
         } else {
-            let _ = write!(message, ": score {:.0}", appraisal.score);
+            let _ = write!(message, ": {} (score {:.0})", appraisal.risk, appraisal.score);
         }
+    }
+    if rejected.len() > MAX_REJECTED_CRATES {
+        let _ = write!(
+            message,
+            "\n- ... and {} more rejected crates",
+            rejected.len() - MAX_REJECTED_CRATES
+        );
     }
 
     message.push_str(
@@ -532,14 +573,14 @@ mod tests {
     fn test_check_risk_errors_no_flags() {
         let crates = vec![make_crate("foo", Version::new(1, 0, 0), Risk::High)];
         let config = Config::default();
-        check_risk_errors(&crates, &config, false, false).unwrap();
+        check_risk_errors(&crates, &config, false, false, false).unwrap();
     }
 
     #[test]
     fn test_check_risk_errors_high_risk_flag_rejects() {
         let crates = vec![make_crate_with_failure("foo", Version::new(1, 0, 0))];
         let config = Config::default();
-        let error = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let error = check_risk_errors(&crates, &config, false, true, false).unwrap_err();
         let message = error.to_string();
         assert!(message.contains("1 crate was appraised as high risk and caused rejection"));
         assert!(message.contains("- foo v1.0.0"));
@@ -549,31 +590,64 @@ mod tests {
     }
 
     #[test]
+    fn test_check_risk_errors_includes_details_when_console_is_suppressed() {
+        let appraisal = Appraisal::required_check_failure(vec![
+            ExpressionOutcome::new(
+                "Policy Failure".into(),
+                "The policy was not satisfied.".into(),
+                ExpressionDisposition::False,
+            ),
+            ExpressionOutcome::new(
+                "Unavailable Facts".into(),
+                "The policy could not be evaluated.".into(),
+                ExpressionDisposition::Failed("service unavailable".into()),
+            ),
+        ]);
+        let crates = vec![ReportableCrate::new(
+            "foo".into(),
+            Arc::new(Version::new(1, 0, 0)),
+            vec![],
+            Some(appraisal),
+        )];
+
+        let error =
+            check_risk_errors(&crates, &Config::default(), false, true, true).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("Policy Failure: The policy was not satisfied."));
+        assert!(message.contains(
+            "Unavailable Facts (inconclusive): The policy could not be evaluated. \
+             (failure to evaluate: service unavailable)"
+        ));
+    }
+
+    #[test]
     fn test_check_risk_errors_high_risk_flag_allows_medium() {
         let crates = vec![make_crate("foo", Version::new(1, 0, 0), Risk::Medium)];
         let config = Config::default();
-        check_risk_errors(&crates, &config, false, true).unwrap();
+        check_risk_errors(&crates, &config, false, true, false).unwrap();
     }
 
     #[test]
     fn test_check_risk_errors_medium_risk_flag_rejects_medium() {
         let crates = vec![make_crate("foo", Version::new(1, 0, 0), Risk::Medium)];
         let config = Config::default();
-        let _ = check_risk_errors(&crates, &config, true, false).unwrap_err();
+        let error = check_risk_errors(&crates, &config, true, false, false).unwrap_err();
+        assert!(error.to_string().contains("- foo v1.0.0: MEDIUM RISK (score 0)"));
     }
 
     #[test]
     fn test_check_risk_errors_medium_risk_flag_rejects_high() {
         let crates = vec![make_crate("foo", Version::new(1, 0, 0), Risk::High)];
         let config = Config::default();
-        let _ = check_risk_errors(&crates, &config, true, false).unwrap_err();
+        let _ = check_risk_errors(&crates, &config, true, false, false).unwrap_err();
     }
 
     #[test]
     fn test_check_risk_errors_medium_risk_flag_explains_required_failure() {
         let crates = vec![make_crate_with_failure("foo", Version::new(1, 0, 0))];
         let config = Config::default();
-        let error = check_risk_errors(&crates, &config, true, false).unwrap_err();
+        let error = check_risk_errors(&crates, &config, true, false, false).unwrap_err();
         let message = error.to_string();
 
         assert!(message.contains("- foo v1.0.0\n    - Sound Crate"));
@@ -584,7 +658,7 @@ mod tests {
     fn test_check_risk_errors_medium_risk_flag_allows_low() {
         let crates = vec![make_crate("foo", Version::new(1, 0, 0), Risk::Low)];
         let config = Config::default();
-        check_risk_errors(&crates, &config, true, false).unwrap();
+        check_risk_errors(&crates, &config, true, false, false).unwrap();
     }
 
     #[test]
@@ -595,7 +669,7 @@ mod tests {
             name: "foo".to_string(),
             version: VersionReq::parse("^1.0").unwrap(),
         });
-        check_risk_errors(&crates, &config, false, true).unwrap();
+        check_risk_errors(&crates, &config, false, true, false).unwrap();
     }
 
     #[test]
@@ -606,7 +680,7 @@ mod tests {
             name: "foo".to_string(),
             version: VersionReq::parse("*").unwrap(),
         });
-        check_risk_errors(&crates, &config, true, false).unwrap();
+        check_risk_errors(&crates, &config, true, false, false).unwrap();
     }
 
     #[test]
@@ -617,7 +691,7 @@ mod tests {
             name: "foo".to_string(),
             version: VersionReq::parse("^1.0").unwrap(),
         });
-        let _ = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let _ = check_risk_errors(&crates, &config, false, true, false).unwrap_err();
     }
 
     #[test]
@@ -628,7 +702,7 @@ mod tests {
             name: "foo".to_string(),
             version: VersionReq::parse("*").unwrap(),
         });
-        let _ = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let _ = check_risk_errors(&crates, &config, false, true, false).unwrap_err();
     }
 
     #[test]
@@ -643,7 +717,7 @@ mod tests {
             version: VersionReq::parse("*").unwrap(),
         });
         // bar is still high risk and not allowed
-        let error = check_risk_errors(&crates, &config, false, true).unwrap_err();
+        let error = check_risk_errors(&crates, &config, false, true, false).unwrap_err();
         let message = error.to_string();
         assert!(!message.contains("foo v1.0.0"));
         assert!(message.contains("bar v1.0.0"));
@@ -664,6 +738,40 @@ mod tests {
             name: "bar".to_string(),
             version: VersionReq::parse("*").unwrap(),
         });
-        check_risk_errors(&crates, &config, true, true).unwrap();
+        check_risk_errors(&crates, &config, true, true, false).unwrap();
+    }
+
+    #[test]
+    fn test_check_risk_errors_bounds_crates_and_required_checks() {
+        let outcomes: Vec<_> = (0..11)
+            .map(|index| {
+                ExpressionOutcome::new(
+                    format!("Check {index}").into(),
+                    "Required policy.".into(),
+                    ExpressionDisposition::False,
+                )
+            })
+            .collect();
+        let crates: Vec<_> = (0..21)
+            .map(|index| {
+                ReportableCrate::new(
+                    format!("crate-{index}").into(),
+                    Arc::new(Version::new(1, 0, 0)),
+                    vec![],
+                    Some(Appraisal::required_check_failure(outcomes.clone())),
+                )
+            })
+            .collect();
+
+        let error =
+            check_risk_errors(&crates, &Config::default(), false, true, false).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("Check 9"));
+        assert!(!message.contains("Check 10"));
+        assert!(message.contains("... and 1 more required checks"));
+        assert!(message.contains("- crate-19 v1.0.0"));
+        assert!(!message.contains("- crate-20 v1.0.0"));
+        assert!(message.contains("... and 1 more rejected crates"));
     }
 }

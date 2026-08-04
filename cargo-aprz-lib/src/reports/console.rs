@@ -231,7 +231,6 @@ mod tests {
     fn test_generate_single_crate_with_evaluation_accepted() {
         let eval = Appraisal {
             risk: Risk::Low,
-            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("quality".into(), "Good quality".into(), ExpressionDisposition::True)],
             available_points: 1,
             awarded_points: 1,
@@ -249,7 +248,6 @@ mod tests {
     fn test_generate_single_crate_with_evaluation_denied() {
         let eval = Appraisal {
             risk: Risk::High,
-            required_check_failure: false,
             expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issues".into(), ExpressionDisposition::False)],
             available_points: 1,
             awarded_points: 0,
@@ -277,7 +275,6 @@ mod tests {
     fn test_generate_color_mode_never() {
         let eval = Appraisal {
             risk: Risk::Low,
-            required_check_failure: false,
             expression_outcomes: vec![],
             available_points: 0,
             awarded_points: 0,

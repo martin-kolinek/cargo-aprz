@@ -531,16 +531,11 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
             Risk::High => ("high", "HIGH RISK"),
         };
         writeln!(writer, "        <span class=\"header-right\">")?;
-        let failed_required_checks = common::failed_required_check_count(appraisal);
-        if failed_required_checks > 0 {
-            let noun = if failed_required_checks == 1 {
-                "required check failed"
-            } else {
-                "required checks failed"
-            };
+        if appraisal.is_required_check_failure() {
             writeln!(
                 writer,
-                "          <span class=\"appraisal-score\">{failed_required_checks} {noun} · score not calculated</span>"
+                "          <span class=\"appraisal-score\">{}</span>",
+                common::format_appraisal_details(appraisal).replace("; ", " · ")
             )?;
         } else {
             writeln!(
@@ -899,7 +894,7 @@ mod tests {
 
         write_crate_card_header(&mut output, &crate_info).unwrap();
 
-        assert!(output.contains("1 required check failed · score not calculated"));
+        assert!(output.contains("1 required check failed · weighted score not calculated"));
         assert!(!output.contains("score 0"));
     }
 

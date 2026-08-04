@@ -199,7 +199,8 @@ language that allows you to write potentially complex boolean expressions that o
 These buckets are evaluated in order. If no expressions are defined, then all crates are considered low risk.
 When a `high_risk` check fails, weighted expressions are skipped and the report says that the
 score was not calculated rather than displaying a misleading zero-out-of-zero score. Expression
-output includes each check's description to explain the policy requirement.
+output includes descriptions for failed or inconclusive checks to explain the policy requirement;
+passing checks remain name-only.
 
 Within these expressions, you can refer to any of the collected metrics. For example, you could write an expression that says
 "the crate must have 100 or fewer open issues to avoid being flagged as high risk":

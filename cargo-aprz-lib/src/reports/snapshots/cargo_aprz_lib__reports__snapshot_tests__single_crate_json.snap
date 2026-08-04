@@ -6,12 +6,37 @@ expression: json_output
   "crates": [
     {
       "appraisal": {
+        "available_points": 3,
+        "awarded_points": 3,
+        "outcomes": [
+          {
+            "description": "Excellent coverage",
+            "disposition": "passed",
+            "failure_reason": null,
+            "name": "coverage"
+          },
+          {
+            "description": "Active development",
+            "disposition": "passed",
+            "failure_reason": null,
+            "name": "active"
+          },
+          {
+            "description": "Well maintained",
+            "disposition": "passed",
+            "failure_reason": null,
+            "name": "maintained"
+          }
+        ],
         "reasons": [
           "coverage",
           "active",
           "maintained"
         ],
-        "result": "LOW RISK (score = 100, awarded points = 3, available points = 3)"
+        "required_check_failure": false,
+        "result": "LOW RISK (score = 100, awarded points = 3, available points = 3)",
+        "risk": "low",
+        "score": 100.0
       },
       "metrics": {
         "community.repo_stars": 12345,

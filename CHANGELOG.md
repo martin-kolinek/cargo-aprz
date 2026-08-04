@@ -7,8 +7,10 @@
 - Updated dependencies
 - Explain required-check failures without displaying a misleading zero-out-of-zero score
 - Include policy descriptions in expression output and list blocking crates in risk-check errors
-- Neutralize formula-like untrusted text in CSV reports
+- Neutralize formula-like textual metric values in CSV reports
 - Flat report reasons now include descriptions for failed or inconclusive checks; passing-check output remains name-only
+- JSON appraisal output adds structured risk, score, point, required-check, and expression-outcome fields while preserving name-only `reasons`
+- Risk-check errors include full required-check diagnostics when console output is suppressed and distinguish inconclusive evaluations from policy failures
 
 ### Performance
 

@@ -6,10 +6,23 @@ expression: output
   "crates": [
     {
       "appraisal": {
+        "available_points": 1,
+        "awarded_points": 1,
+        "outcomes": [
+          {
+            "description": "High stars and good coverage",
+            "disposition": "passed",
+            "failure_reason": null,
+            "name": "high_stars"
+          }
+        ],
         "reasons": [
           "high_stars"
         ],
-        "result": "LOW RISK (score = 100, awarded points = 1, available points = 1)"
+        "required_check_failure": false,
+        "result": "LOW RISK (score = 100, awarded points = 1, available points = 1)",
+        "risk": "low",
+        "score": 100.0
       },
       "metrics": {
         "community.repo_stars": 20000,
@@ -29,10 +42,23 @@ expression: output
     },
     {
       "appraisal": {
-        "reasons": [
-          "low_stars: Low star count"
+        "available_points": 1,
+        "awarded_points": 0,
+        "outcomes": [
+          {
+            "description": "Low star count",
+            "disposition": "failed",
+            "failure_reason": null,
+            "name": "low_stars"
+          }
         ],
-        "result": "HIGH RISK (score = 0, awarded points = 0, available points = 1)"
+        "reasons": [
+          "low_stars"
+        ],
+        "required_check_failure": false,
+        "result": "HIGH RISK (score = 0, awarded points = 0, available points = 1)",
+        "risk": "high",
+        "score": 0.0
       },
       "metrics": {
         "community.repo_stars": 8000,
