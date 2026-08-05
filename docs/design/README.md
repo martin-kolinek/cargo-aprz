@@ -46,9 +46,12 @@ requesting a complete console or JSON report. Required-gate rejections distingui
 policy failures from inconclusive evaluations, identify the crate as high risk,
 and state that weighted scoring was not calculated. When console appraisal reasons
 are not rendered, including partial `--console` modes, the error includes
-descriptions and evaluation-failure reasons so it remains actionable as the
-command's only diagnostic. When the console already rendered appraisal reasons,
-the error remains concise to avoid repeating those details. Score-based
+explicit `FAILED` or `INCONCLUSIVE` labels. Failed checks present their policy
+description as an unmet requirement; inconclusive checks present the description
+as the requirement that could not be evaluated and include the evaluation error.
+This keeps the output actionable without presenting the desired policy condition
+as though it were the reason for rejection. When the console already rendered
+appraisal reasons, the error remains concise to avoid repeating those details. Score-based
 rejections use a consistent risk-and-score format and include bounded non-passing
 weighted outcomes when the console omitted them. The error directs users to
 remediate, upgrade, or replace the dependency.

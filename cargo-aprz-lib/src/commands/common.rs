@@ -569,17 +569,21 @@ fn append_non_passing_outcomes(
     for outcome in relevant_outcomes.iter().take(limit) {
         match &outcome.disposition {
             ExpressionDisposition::False => {
-                let _ = write!(message, "\n    - {}", outcome.name);
-                if include_details {
-                    let _ = write!(message, ": {}", outcome.description);
-                }
-            }
-            ExpressionDisposition::Failed(reason) => {
-                let _ = write!(message, "\n    - {} (inconclusive)", outcome.name);
+                let _ = write!(message, "\n    - FAILED: {}", outcome.name);
                 if include_details {
                     let _ = write!(
                         message,
-                        ": {} (failure to evaluate: {reason})",
+                        "; requirement not met: {}",
+                        outcome.description
+                    );
+                }
+            }
+            ExpressionDisposition::Failed(reason) => {
+                let _ = write!(message, "\n    - INCONCLUSIVE: {}", outcome.name);
+                if include_details {
+                    let _ = write!(
+                        message,
+                        "; could not evaluate requirement: {} (error: {reason})",
                         outcome.description
                     );
                 }
@@ -649,7 +653,7 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("1 crate was appraised as high risk and caused rejection"));
         assert!(message.contains("- foo v1.0.0: HIGH RISK (weighted score not calculated)"));
-        assert!(message.contains("    - Sound Crate"));
+        assert!(message.contains("    - FAILED: Sound Crate"));
         assert!(!message.contains("The crate is not flagged as unsound."));
         assert!(message.contains("[[allow_list]]"));
     }
@@ -680,9 +684,10 @@ mod tests {
         let message = error.to_string();
 
         assert!(message.contains(
-            "- foo v1.0.0: HIGH RISK (weighted score not calculated)\n    - Policy Failure: The policy was not satisfied.\n    - \
-             Unavailable Facts (inconclusive): The policy could not be evaluated. \
-             (failure to evaluate: service unavailable)"
+            "- foo v1.0.0: HIGH RISK (weighted score not calculated)\n    - FAILED: Policy Failure; \
+             requirement not met: The policy was not satisfied.\n    - INCONCLUSIVE: \
+             Unavailable Facts; could not evaluate requirement: The policy could not be \
+             evaluated. (error: service unavailable)"
         ));
     }
 
@@ -723,7 +728,9 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("Maintained: The crate was recently maintained.")
+                .contains(
+                    "FAILED: Maintained; requirement not met: The crate was recently maintained."
+                )
         );
     }
 
@@ -757,7 +764,7 @@ mod tests {
         let message = error.to_string();
 
         assert!(message.contains(
-            "- foo v1.0.0: HIGH RISK (weighted score not calculated)\n    - Sound Crate"
+            "- foo v1.0.0: HIGH RISK (weighted score not calculated)\n    - FAILED: Sound Crate"
         ));
         assert!(!message.contains("score 0"));
     }
@@ -942,8 +949,8 @@ mod tests {
 
         assert!(message.contains("- foo v1.0.0: HIGH RISK (weighted score not calculated)"));
         assert!(message.contains(
-            "Advisory facts (inconclusive): Advisory facts must be available. \
-             (failure to evaluate: service unavailable)"
+            "INCONCLUSIVE: Advisory facts; could not evaluate requirement: Advisory facts must be \
+             available. (error: service unavailable)"
         ));
     }
 }
