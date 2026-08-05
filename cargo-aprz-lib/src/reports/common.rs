@@ -142,11 +142,27 @@ pub fn format_appraisal_details_with_separator(appraisal: &Appraisal, separator:
         return format!("{summary}{separator}weighted score not calculated");
     }
 
+    if appraisal.is_weighted_evaluation_failure() {
+        let inconclusive = appraisal
+            .expression_outcomes
+            .iter()
+            .filter(|outcome| {
+                matches!(outcome.disposition, ExpressionDisposition::Failed(_))
+            })
+            .count();
+        let summary = if inconclusive == 1 {
+            "1 weighted check inconclusive".to_string()
+        } else {
+            format!("{inconclusive} weighted checks inconclusive")
+        };
+        return format!("{summary}{separator}weighted score not calculated");
+    }
+
     format!(
         "score = {:.0}, awarded points = {}, available points = {}",
         appraisal
             .weighted_score()
-            .expect("non-required appraisals have a weighted score"),
+            .expect("scored appraisals have a weighted score"),
         appraisal.awarded_points,
         appraisal.available_points,
     )
@@ -471,6 +487,27 @@ mod tests {
         assert_eq!(
             format_appraisal_details(&appraisal),
             "required check failed (details unavailable); weighted score not calculated"
+        );
+    }
+
+    #[test]
+    fn test_format_appraisal_details_explains_total_weighted_evaluation_failure() {
+        let appraisal = Appraisal::weighted_evaluation_failure(vec![
+            ExpressionOutcome::new(
+                "Weighted 1".into(),
+                "Weighted policy 1".into(),
+                ExpressionDisposition::Failed("unavailable".into()),
+            ),
+            ExpressionOutcome::new(
+                "Weighted 2".into(),
+                "Weighted policy 2".into(),
+                ExpressionDisposition::Failed("unavailable".into()),
+            ),
+        ]);
+
+        assert_eq!(
+            format_appraisal_status(&appraisal),
+            "HIGH RISK (2 weighted checks inconclusive; weighted score not calculated)"
         );
     }
 

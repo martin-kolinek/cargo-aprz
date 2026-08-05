@@ -541,7 +541,7 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
             Risk::High => ("high", "HIGH RISK"),
         };
         writeln!(writer, "        <span class=\"header-right\">")?;
-        if appraisal.is_required_check_failure() {
+        if appraisal.weighted_score().is_none() {
             writeln!(
                 writer,
                 "          <span class=\"appraisal-score\">{}</span>",
@@ -555,7 +555,7 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
                 "          <span class=\"appraisal-score\">score {:.0} · {}/{} points</span>",
                 appraisal
                     .weighted_score()
-                    .expect("non-required appraisals have a weighted score"),
+                    .expect("scored appraisals have a weighted score"),
                 appraisal.awarded_points,
                 appraisal.available_points
             )?;
@@ -912,6 +912,24 @@ mod tests {
 
         assert!(output.contains("1 required check failed · weighted score not calculated"));
         assert!(!output.contains("score 0"));
+    }
+
+    #[test]
+    fn test_crate_header_explains_weighted_evaluation_failure() {
+        let appraisal = Appraisal::weighted_evaluation_failure(vec![
+            ExpressionOutcome::new(
+                "Advisory facts".into(),
+                "Advisory facts must be available.".into(),
+                ExpressionDisposition::Failed("service unavailable".into()),
+            ),
+        ]);
+        let crate_info = create_test_crate("example", "1.0.0", Some(appraisal));
+        let mut output = String::new();
+
+        write_crate_card_header(&mut output, &crate_info).unwrap();
+
+        assert!(output.contains("1 weighted check inconclusive · weighted score not calculated"));
+        assert!(!output.contains("score -1"));
     }
 
     #[test]

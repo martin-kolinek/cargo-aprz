@@ -22,7 +22,8 @@ expression: output
         "required_check_failure": false,
         "result": "LOW RISK (score = 100, awarded points = 1, available points = 1)",
         "risk": "low",
-        "score": 100.0
+        "score": 100.0,
+        "weighted_evaluation_failure": false
       },
       "metrics": {
         "community.repo_stars": 20000,
@@ -58,7 +59,8 @@ expression: output
         "required_check_failure": false,
         "result": "HIGH RISK (score = 0, awarded points = 0, available points = 1)",
         "risk": "high",
-        "score": 0.0
+        "score": 0.0,
+        "weighted_evaluation_failure": false
       },
       "metrics": {
         "community.repo_stars": 8000,

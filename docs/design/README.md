@@ -8,18 +8,22 @@
    failure immediately makes the crate high risk, and the weighted score is not
    calculated.
 2. If all required checks pass, weighted `eval` checks produce a score and the
-   configured thresholds determine the risk level.
+   configured thresholds determine the risk level. When weighted checks are
+   configured but every one fails to evaluate, the appraisal fails closed as
+   high risk and has no weighted score. An empty weighted policy or a policy
+   whose configured weights are all zero remains low risk with a score of 100.
 
-Reports distinguish required-check policy failures, required checks that could
-not be evaluated, and weighted scores. Failed and inconclusive expression
+Reports distinguish required-check policy failures, required or weighted checks
+that could not be evaluated, and weighted scores. Failed and inconclusive expression
 results include both the configured check name and description so users can
 understand what the policy requires. Passing results remain name-only to keep
 output concise.
 
 Required-gate state is encoded separately from threshold and point totals while
 preserving the existing public `Appraisal` struct shape. Production consumers use
-`weighted_score`, which returns no score when a required gate skipped weighted
-evaluation; raw score storage is retained only for struct-literal compatibility.
+`weighted_score`, which returns no score when a required gate or total weighted
+evaluation failure prevented scoring; raw score storage is retained only for
+struct-literal compatibility.
 
 CSV reports neutralize textual metric cells whose first non-whitespace character
 is a spreadsheet formula marker (`=`, `+`, `-`, or `@`) by prefixing an
@@ -30,9 +34,10 @@ which prevents them from being interpreted as formulas.
 
 JSON preserves the legacy `result` and `reasons` fields, including the
 `failure to evaluate` suffix for inconclusive reasons, while exposing structured
-risk, score, point, required-check, and per-expression outcome fields. Score and
-point fields are null when a required gate prevents weighted scoring. Consumers
-should use the structured fields rather than parsing display strings.
+risk, score, point, required-check, weighted-evaluation-failure, and
+per-expression outcome fields. Score and point fields are null when evaluation
+does not produce a weighted score. Consumers should use the structured fields
+rather than parsing display strings.
 
 When `--error-if-high-risk` or `--error-if-medium-risk` rejects a run, the final
 error lists up to 20 non-allowed crates that caused the rejection and up to 10

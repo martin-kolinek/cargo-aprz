@@ -17,8 +17,9 @@ use std::sync::Arc;
 /// 2. If ANY high-risk expression is false or fails to evaluate, return HIGH RISK with all outcomes
 /// 3. If no high-risk expressions or all are true, continue to eval expressions
 /// 4. Evaluate ALL `eval` expressions, summing granted vs possible points
-/// 5. Compute score = granted / possible * 100, compare against thresholds
-/// 6. If no expressions defined, returns LOW RISK with score 100
+/// 5. If every weighted expression fails to evaluate, return HIGH RISK without a score
+/// 6. Compute score = granted / possible * 100, compare against thresholds
+/// 7. If no expressions defined, returns LOW RISK with score 100
 ///
 /// Expression evaluation failures are captured as [`ExpressionDisposition::Failed`]
 /// rather than causing the function to fail.
@@ -67,6 +68,7 @@ pub fn evaluate(
 
     let mut available_points: u32 = 0;
     let mut awarded_points: u32 = 0;
+    let has_weighted_points = eval.iter().any(|expr| expr.points().unwrap_or(1) > 0);
     let mut outcomes = high_risk_outcomes;
     outcomes.reserve(eval.len());
 
@@ -92,7 +94,16 @@ pub fn evaluate(
         ));
     }
 
-    // No expressions means nothing to fail, so default to a perfect score
+    if has_weighted_points
+        && available_points == 0
+        && outcomes
+            .iter()
+            .any(|outcome| matches!(outcome.disposition, ExpressionDisposition::Failed(_)))
+    {
+        return Appraisal::weighted_evaluation_failure(outcomes);
+    }
+
+    // Empty or zero-weight policies have nothing weighted to fail.
     let score = if available_points > 0 {
         f64::from(awarded_points) / f64::from(available_points) * 100.0
     } else {
@@ -751,14 +762,28 @@ mod tests {
 
     #[test]
     #[cfg_attr(miri, ignore)]
-    fn test_points_all_expressions_fail_gives_perfect_score() {
-        // If every expression fails, available_points = 0, score defaults to 100
+    fn test_points_all_expressions_fail_closed_without_a_score() {
         let e1 = Expression::new("e1", None, "undefined_a > 0", Some(3)).unwrap();
         let e2 = Expression::new("e2", None, "undefined_b > 0", Some(7)).unwrap();
         let outcome = evaluate(&[], &[e1, e2], Vec::<Metric>::new(), test_timestamp(), MEDIUM_THRESHOLD, LOW_THRESHOLD);
         assert_eq!(outcome.available_points, 0);
         assert_eq!(outcome.awarded_points, 0);
-        assert!((outcome.score - 100.0).abs() < 0.001);
+        assert_eq!(outcome.weighted_score(), None);
+        assert!(outcome.is_weighted_evaluation_failure());
+        assert_eq!(outcome.risk, Risk::High);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_zero_weight_expressions_keep_default_perfect_score() {
+        let e1 = Expression::new("e1", None, "stars > 100", Some(0)).unwrap();
+        let e2 = Expression::new("e2", None, "undefined > 0", Some(0)).unwrap();
+        let metrics = vec![Metric::with_value(&STARS_DEF, MetricValue::UInt(150))];
+
+        let outcome =
+            evaluate(&[], &[e1, e2], &metrics, test_timestamp(), MEDIUM_THRESHOLD, LOW_THRESHOLD);
+
+        assert_eq!(outcome.weighted_score(), Some(100.0));
         assert_eq!(outcome.risk, Risk::Low);
     }
 

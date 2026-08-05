@@ -30,6 +30,10 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
                 "required_check_failure".into(),
                 json!(appraisal.is_required_check_failure()),
             );
+            eval_obj.insert(
+                "weighted_evaluation_failure".into(),
+                json!(appraisal.is_weighted_evaluation_failure()),
+            );
             let weighted_score = appraisal.weighted_score();
             let score_was_calculated = weighted_score.is_some();
             eval_obj.insert("score".into(), weighted_score.into());
@@ -278,6 +282,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         let appraisal = &parsed["crates"][0]["appraisal"];
         assert_eq!(appraisal["required_check_failure"], true);
+        assert_eq!(appraisal["weighted_evaluation_failure"], false);
         assert!(appraisal["score"].is_null());
         assert!(appraisal["awarded_points"].is_null());
         assert!(appraisal["available_points"].is_null());
@@ -290,6 +295,27 @@ mod tests {
             appraisal["outcomes"][0]["failure_reason"],
             "service unavailable"
         );
+    }
+
+    #[test]
+    fn test_generate_weighted_evaluation_failure_has_distinct_state_and_null_score() {
+        let eval = Appraisal::weighted_evaluation_failure(vec![ExpressionOutcome::new(
+            "facts".into(),
+            "Facts must be available.".into(),
+            ExpressionDisposition::Failed("service unavailable".into()),
+        )]);
+        let crates = vec![create_test_crate("bad_crate", "1.0.0", Some(eval))];
+        let mut output = String::new();
+
+        generate(&crates, &mut output).unwrap();
+
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+        let appraisal = &parsed["crates"][0]["appraisal"];
+        assert_eq!(appraisal["required_check_failure"], false);
+        assert_eq!(appraisal["weighted_evaluation_failure"], true);
+        assert!(appraisal["score"].is_null());
+        assert!(appraisal["awarded_points"].is_null());
+        assert!(appraisal["available_points"].is_null());
     }
 
     #[test]

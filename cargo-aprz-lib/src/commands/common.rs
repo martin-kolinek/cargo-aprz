@@ -499,9 +499,7 @@ fn check_risk_errors(
                 "required check",
                 "required checks",
             );
-        } else {
-            let score =
-                appraisal.weighted_score().expect("non-required appraisals have a weighted score");
+        } else if let Some(score) = appraisal.weighted_score() {
             let _ = write!(message, ": {} (score {score:.0})", appraisal.risk);
             if include_check_details {
                 details_were_capped |= append_non_passing_outcomes(
@@ -511,6 +509,22 @@ fn check_risk_errors(
                     true,
                     "non-passing outcome",
                     "non-passing outcomes",
+                );
+            }
+        } else {
+            let _ = write!(
+                message,
+                ": {} (weighted score not calculated)",
+                appraisal.risk
+            );
+            if include_check_details {
+                details_were_capped |= append_non_passing_outcomes(
+                    &mut message,
+                    &appraisal.expression_outcomes,
+                    MAX_OUTCOMES_PER_CRATE,
+                    true,
+                    "weighted check",
+                    "weighted checks",
                 );
             }
         }
@@ -863,12 +877,73 @@ mod tests {
 
         assert!(message.contains("Check 9"));
         assert!(!message.contains("Check 10"));
-        assert!(message.contains("... and 1 more required check"));
+        assert!(message.contains("... and 1 more required check\n"));
+        assert!(!message.contains("1 more required checks"));
         assert!(message.contains("- crate-19 v1.0.0"));
         assert!(!message.contains("- crate-20 v1.0.0"));
-        assert!(message.contains("... and 1 more rejected crate"));
+        assert!(message.contains("... and 1 more rejected crate\n"));
+        assert!(!message.contains("1 more rejected crates"));
         assert!(message.contains(
             "Run with --console appraisal,reasons or write --json <path> for complete appraisal details."
+        ));
+    }
+
+    #[test]
+    fn test_check_risk_errors_pluralizes_required_and_weighted_outcome_tails() {
+        let outcomes: Vec<_> = (0..12)
+            .map(|index| {
+                ExpressionOutcome::new(
+                    format!("Check {index}").into(),
+                    "Policy.".into(),
+                    ExpressionDisposition::Failed("unavailable".into()),
+                )
+            })
+            .collect();
+        let crates = vec![
+            ReportableCrate::new(
+                "required".into(),
+                Arc::new(Version::new(1, 0, 0)),
+                vec![],
+                Some(Appraisal::required_check_failure(outcomes.clone())),
+            ),
+            ReportableCrate::new(
+                "weighted".into(),
+                Arc::new(Version::new(1, 0, 0)),
+                vec![],
+                Some(Appraisal::new(Risk::High, outcomes, 12, 0, 0.0)),
+            ),
+        ];
+
+        let error =
+            check_risk_errors(&crates, &Config::default(), false, true, true).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("... and 2 more required checks\n"));
+        assert!(message.contains("... and 2 more non-passing outcomes\n"));
+    }
+
+    #[test]
+    fn test_check_risk_errors_explains_total_weighted_evaluation_failure() {
+        let appraisal = Appraisal::weighted_evaluation_failure(vec![ExpressionOutcome::new(
+            "Advisory facts".into(),
+            "Advisory facts must be available.".into(),
+            ExpressionDisposition::Failed("service unavailable".into()),
+        )]);
+        let crates = vec![ReportableCrate::new(
+            "foo".into(),
+            Arc::new(Version::new(1, 0, 0)),
+            vec![],
+            Some(appraisal),
+        )];
+
+        let error =
+            check_risk_errors(&crates, &Config::default(), false, true, true).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("- foo v1.0.0: HIGH RISK (weighted score not calculated)"));
+        assert!(message.contains(
+            "Advisory facts (inconclusive): Advisory facts must be available. \
+             (failure to evaluate: service unavailable)"
         ));
     }
 }

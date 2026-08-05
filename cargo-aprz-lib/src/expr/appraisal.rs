@@ -8,11 +8,14 @@ pub struct Appraisal {
     pub available_points: u32,
     pub awarded_points: u32,
     /// Raw weighted score storage. Use [`Self::weighted_score`] to account for
-    /// required gates that skip weighted scoring.
+    /// evaluation states that do not produce a score.
     pub score: f64,
 }
 
 impl Appraisal {
+    const REQUIRED_CHECK_FAILURE_SCORE: f64 = -0.0;
+    const WEIGHTED_EVALUATION_FAILURE_SCORE: f64 = -1.0;
+
     #[must_use]
     pub const fn new(
         risk: Risk,
@@ -45,19 +48,41 @@ impl Appraisal {
             awarded_points: 0,
             // Weighted scores are always non-negative. Negative zero preserves
             // numeric compatibility while recording that scoring was skipped.
-            score: -0.0,
+            score: Self::REQUIRED_CHECK_FAILURE_SCORE,
+        }
+    }
+
+    #[must_use]
+    pub fn weighted_evaluation_failure(expression_outcomes: Vec<ExpressionOutcome>) -> Self {
+        debug_assert!(
+            expression_outcomes.iter().any(|outcome| {
+                matches!(outcome.disposition, super::ExpressionDisposition::Failed(_))
+            }),
+            "weighted-evaluation failures must contain an inconclusive outcome"
+        );
+        Self {
+            risk: Risk::High,
+            expression_outcomes,
+            available_points: 0,
+            awarded_points: 0,
+            score: Self::WEIGHTED_EVALUATION_FAILURE_SCORE,
         }
     }
 
     #[must_use]
     pub const fn is_required_check_failure(&self) -> bool {
-        self.score.is_sign_negative()
+        self.score.to_bits() == Self::REQUIRED_CHECK_FAILURE_SCORE.to_bits()
     }
 
-    /// Returns the weighted score, or `None` when a required gate skipped scoring.
+    #[must_use]
+    pub const fn is_weighted_evaluation_failure(&self) -> bool {
+        self.score.to_bits() == Self::WEIGHTED_EVALUATION_FAILURE_SCORE.to_bits()
+    }
+
+    /// Returns the weighted score, or `None` when evaluation did not produce one.
     #[must_use]
     pub const fn weighted_score(&self) -> Option<f64> {
-        if self.is_required_check_failure() {
+        if self.is_required_check_failure() || self.is_weighted_evaluation_failure() {
             None
         } else {
             Some(self.score)
@@ -99,5 +124,18 @@ mod tests {
 
         assert!(!appraisal.is_required_check_failure());
         assert_eq!(appraisal.weighted_score(), Some(0.0));
+    }
+
+    #[test]
+    fn test_weighted_evaluation_failure_records_distinct_skipped_score_state() {
+        let appraisal = Appraisal::weighted_evaluation_failure(vec![ExpressionOutcome::new(
+            "Weighted".into(),
+            "Weighted policy".into(),
+            ExpressionDisposition::Failed("unavailable".into()),
+        )]);
+
+        assert!(!appraisal.is_required_check_failure());
+        assert!(appraisal.is_weighted_evaluation_failure());
+        assert_eq!(appraisal.weighted_score(), None);
     }
 }
