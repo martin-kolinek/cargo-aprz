@@ -19,7 +19,7 @@
   evaluation-failure diagnostics
 - Risk-check errors include full required-check diagnostics when console output is suppressed and distinguish inconclusive evaluations from policy failures
 - Rejection details label outcomes as `FAILED` or `INCONCLUSIVE` and identify
-  policy descriptions as direct or unevaluated requirements
+  policy descriptions as expected or unevaluated conditions
 
 ### Performance
 

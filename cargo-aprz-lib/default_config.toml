@@ -165,7 +165,7 @@ expression = "advisories.version_unmaintained_warnings == 0"
 
 [[high_risk]]
 name = "Sound Crate"
-description = "The crate must have no RustSec advisory marking it as unsound."
+description = "RustSec reports zero unsound advisories for this crate version."
 expression = "advisories.version_unsound_warnings == 0"
 
 [[high_risk]]

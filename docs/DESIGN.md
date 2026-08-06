@@ -100,5 +100,10 @@ from inconclusive evaluation. Its detail list is bounded to keep errors usable:
 up to 20 crates and 10 non-passing outcomes per crate. When details are omitted,
 the output points users to complete console or JSON reports.
 
+Policy descriptions state the condition an expression expects. Rejection output
+labels that text as `expected` rather than presenting the desired condition as
+though it were the reason for rejection. Inconclusive output separately identifies
+the expected condition and the evaluation error.
+
 Allow-list entries are applied after appraisal. An allowed crate remains visible
 with its computed metrics and risk, but it does not cause the command to fail.

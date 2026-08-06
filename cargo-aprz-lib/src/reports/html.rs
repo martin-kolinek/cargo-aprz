@@ -50,6 +50,10 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], timestamp: DateTime<Local>
                     c.name.as_ref(),
                     c.version.to_string(),
                     crate_description(c),
+                    // The browser's score control requires a finite numeric sort
+                    // key. Unscored appraisals are already isolated by risk and
+                    // deliberately sort with the lowest scored entries; this
+                    // fallback must never be rendered as a weighted score.
                     c.appraisal
                         .as_ref()
                         .and_then(Appraisal::weighted_score)
@@ -580,8 +584,13 @@ fn write_appraisal_table<W: Write>(writer: &mut W, appraisal: &Appraisal) -> Res
             ExpressionDisposition::Failed(_) => ("inconclusive", "INCONCLUSIVE"),
         };
         let detail = match &outcome.disposition {
-            ExpressionDisposition::True | ExpressionDisposition::False => html_escape(&outcome.description),
-            ExpressionDisposition::Failed(reason) => html_escape(reason),
+            ExpressionDisposition::True => String::new(),
+            ExpressionDisposition::False => html_escape(&outcome.description),
+            ExpressionDisposition::Failed(reason) => format!(
+                "{}<br><strong>Evaluation error:</strong> {}",
+                html_escape(&outcome.description),
+                html_escape(reason)
+            ),
         };
         writeln!(writer, "          <tr>")?;
         writeln!(writer, "            <td>{}</td>", html_escape(&outcome.name))?;
@@ -901,7 +910,7 @@ mod tests {
         let appraisal = Appraisal::required_check_failure(vec![
             ExpressionOutcome::new(
                 "Sound Crate".into(),
-                "The crate must have no RustSec advisory marking it as unsound.".into(),
+                "RustSec reports zero unsound advisories for this crate version.".into(),
                 ExpressionDisposition::False,
             ),
         ]);
@@ -937,7 +946,7 @@ mod tests {
     fn test_required_check_failure_uses_normalized_sort_score() {
         let required = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
             "Sound Crate".into(),
-            "The crate must have no RustSec advisory marking it as unsound.".into(),
+            "RustSec reports zero unsound advisories for this crate version.".into(),
             ExpressionDisposition::False,
         )]);
         let scored = Appraisal::new(Risk::Low, vec![], 1, 1, 100.0);
@@ -1164,8 +1173,8 @@ mod tests {
                 Risk::Low,
                 vec![ExpressionOutcome::new(
                     "broken_check".into(),
-                    "desc".into(),
-                    ExpressionDisposition::Failed("variable not found".into()),
+                    "Required facts <must> be available.".into(),
+                    ExpressionDisposition::Failed("variable <not> found".into()),
                 )],
                 0, 0, 100.0,
             )),
@@ -1174,7 +1183,8 @@ mod tests {
         generate(&crates, test_timestamp(), &mut output).unwrap();
 
         assert!(output.contains("INCONCLUSIVE"));
-        assert!(output.contains("variable not found"));
+        assert!(output.contains("Required facts &lt;must&gt; be available."));
+        assert!(output.contains("<strong>Evaluation error:</strong> variable &lt;not&gt; found"));
         assert!(output.contains("broken_check"));
     }
 
@@ -1189,8 +1199,16 @@ mod tests {
             Some(Appraisal::new(
                 Risk::Medium,
                 vec![
-                    ExpressionOutcome::new("ok_check".into(), "Passed check".into(), ExpressionDisposition::True),
-                    ExpressionOutcome::new("bad_check".into(), "Failed check".into(), ExpressionDisposition::False),
+                    ExpressionOutcome::new(
+                        "ok_check".into(),
+                        "Passing description should be hidden".into(),
+                        ExpressionDisposition::True,
+                    ),
+                    ExpressionOutcome::new(
+                        "bad_check".into(),
+                        "Failed requirement remains visible".into(),
+                        ExpressionDisposition::False,
+                    ),
                 ],
                 2, 1, 50.0,
             )),
@@ -1202,6 +1220,8 @@ mod tests {
         assert!(output.contains("FAILED"));
         assert!(output.contains("ok_check"));
         assert!(output.contains("bad_check"));
+        assert!(!output.contains("Passing description should be hidden"));
+        assert!(output.contains("Failed requirement remains visible"));
     }
 
     // --- crate with empty expression outcomes (appraisal but no appraisal tab) ---
