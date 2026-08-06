@@ -18,7 +18,7 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
         write!(
             writer,
             ",{}",
-            escape_csv(&format!("{} v{}", crate_info.name, crate_info.version))
+            escape_csv_untrusted(&format!("{} v{}", crate_info.name, crate_info.version))
         )?;
     }
     writeln!(writer)?;
@@ -56,7 +56,7 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
         if let Some(category_metrics) = ctx.metrics_by_category.get(&category) {
             // Write each metric in this category
             for metric_name in category_metrics {
-                write!(writer, "{}", escape_csv(metric_name))?;
+                write!(writer, "{}", escape_csv_untrusted(metric_name))?;
 
                 // Write values for each crate
                 for metric_map in &ctx.crate_metric_maps {
@@ -163,6 +163,14 @@ mod tests {
     static TEXT_DEF: MetricDef = MetricDef {
         name: "text",
         description: "Untrusted text",
+        category: MetricCategory::Metadata,
+        extractor: |_| None,
+        default_value: || None,
+    };
+
+    static FORMULA_NAME_DEF: MetricDef = MetricDef {
+        name: "=formula-name",
+        description: "Formula-like metric name",
         category: MetricCategory::Metadata,
         extractor: |_| None,
         default_value: || None,
@@ -300,6 +308,25 @@ mod tests {
         generate(&[crate_info], &mut output).unwrap();
 
         assert!(output.contains("text,\"'=HYPERLINK(\"\"https://example.invalid\"\")\""));
+    }
+
+    #[test]
+    fn test_generate_neutralizes_formula_like_header_and_metric_name() {
+        let crate_info = ReportableCrate::new(
+            "=formula-crate".into(),
+            Arc::new("1.0.0".parse().unwrap()),
+            vec![Metric::with_value(
+                &FORMULA_NAME_DEF,
+                MetricValue::UInt(1),
+            )],
+            None,
+        );
+        let mut output = String::new();
+
+        generate(&[crate_info], &mut output).unwrap();
+
+        assert!(output.starts_with("Metric,'=formula-crate v1.0.0\n"));
+        assert!(output.contains("\n'=formula-name,1\n"));
     }
 
     #[test]

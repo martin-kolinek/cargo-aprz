@@ -121,8 +121,9 @@ use `null` for score and point fields. `evaluation_error` is non-null only for
 an `inconclusive` outcome. Legacy `result` and `reasons` remain for compatibility,
 while machine consumers should prefer the structured fields.
 
-CSV neutralizes formula-like untrusted text before escaping it. Excel emits
-textual values as string cells. Numeric values remain numeric in both formats.
+CSV neutralizes formula-like crate headers, metric names, and textual metric
+values before escaping them. Excel emits textual values as string cells.
+Numeric values remain numeric in both formats.
 
 Risk thresholds can turn an appraisal into a command failure. The rejection
 error identifies the affected crates and distinguishes failed policy requirements

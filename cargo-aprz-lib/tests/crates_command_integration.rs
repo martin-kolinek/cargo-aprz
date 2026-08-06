@@ -379,9 +379,7 @@ async fn test_error_if_high_risk_triggers_without_allow_list() {
     );
     let error = host.error_str();
     assert!(error.contains("- serde v1.0.200"));
-    assert!(error.contains(
-        "    - FAILED: Always Fail; expected: Always flags crate as high risk"
-    ));
+    assert!(error.contains("    - FAILED: Always Fail; expected: Always flags crate as high risk"));
     assert!(error.contains("[[allow_list]]"));
 }
 

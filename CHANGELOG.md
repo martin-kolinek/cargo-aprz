@@ -10,9 +10,10 @@
 - Count inconclusive positive-weight checks as unawarded configured points, and
   fail closed without a score when every positive-weight check is inconclusive
 - Include policy descriptions in expression output and list blocking crates in risk-check errors
-- Neutralize formula-like textual metric values in CSV reports; this prefixes
-  an apostrophe for any text whose first non-whitespace character is `=`, `+`,
-  `-`, or `@`, including benign dash-prefixed descriptions
+- Neutralize formula-like crate headers, metric names, and textual metric values
+  in CSV reports; this prefixes an apostrophe for any text whose first
+  non-whitespace character is `=`, `+`, `-`, or `@`, including benign
+  dash-prefixed descriptions
 - Flat report reasons now include descriptions for failed or inconclusive checks; passing-check output remains name-only
 - JSON appraisal output adds structured risk, nullable score/point, required-check,
   and expression-outcome fields while preserving legacy `reasons`, including
