@@ -407,7 +407,7 @@ mod tests {
         let appraisal = Appraisal::required_check_failure(vec![
             ExpressionOutcome::new(
                 "Sound Crate".into(),
-                "The crate is not flagged as unsound.".into(),
+                "The crate must have no RustSec advisory marking it as unsound.".into(),
                 ExpressionDisposition::False,
             ),
         ]);
@@ -515,13 +515,13 @@ mod tests {
     fn test_outcome_icon_name_includes_description() {
         let outcome = ExpressionOutcome::new(
             "Sound Crate".into(),
-            "The crate is not flagged as unsound.".into(),
+            "The crate must have no RustSec advisory marking it as unsound.".into(),
             ExpressionDisposition::False,
         );
 
         assert_eq!(
             outcome_icon_name(&outcome).to_string(),
-            "❌ Sound Crate: The crate is not flagged as unsound."
+            "❌ Sound Crate: The crate must have no RustSec advisory marking it as unsound."
         );
     }
 
@@ -529,7 +529,7 @@ mod tests {
     fn test_outcome_icon_name_omits_description_for_passing_check() {
         let outcome = ExpressionOutcome::new(
             "Sound Crate".into(),
-            "The crate is not flagged as unsound.".into(),
+            "The crate must have no RustSec advisory marking it as unsound.".into(),
             ExpressionDisposition::True,
         );
 

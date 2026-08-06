@@ -571,11 +571,7 @@ fn append_non_passing_outcomes(
             ExpressionDisposition::False => {
                 let _ = write!(message, "\n    - FAILED: {}", outcome.name);
                 if include_details {
-                    let _ = write!(
-                        message,
-                        "; requirement not met: {}",
-                        outcome.description
-                    );
+                    let _ = write!(message, "; requirement: {}", outcome.description);
                 }
             }
             ExpressionDisposition::Failed(reason) => {
@@ -631,7 +627,7 @@ mod tests {
             Some(Appraisal::required_check_failure(vec![
                 ExpressionOutcome::new(
                     "Sound Crate".into(),
-                    "The crate is not flagged as unsound.".into(),
+                    "The crate must have no RustSec advisory marking it as unsound.".into(),
                     ExpressionDisposition::False,
                 ),
             ])),
@@ -654,7 +650,7 @@ mod tests {
         assert!(message.contains("1 crate was appraised as high risk and caused rejection"));
         assert!(message.contains("- foo v1.0.0: HIGH RISK (weighted score not calculated)"));
         assert!(message.contains("    - FAILED: Sound Crate"));
-        assert!(!message.contains("The crate is not flagged as unsound."));
+        assert!(!message.contains("The crate must have no RustSec advisory marking it as unsound."));
         assert!(message.contains("[[allow_list]]"));
     }
 
@@ -685,7 +681,7 @@ mod tests {
 
         assert!(message.contains(
             "- foo v1.0.0: HIGH RISK (weighted score not calculated)\n    - FAILED: Policy Failure; \
-             requirement not met: The policy was not satisfied.\n    - INCONCLUSIVE: \
+             requirement: The policy was not satisfied.\n    - INCONCLUSIVE: \
              Unavailable Facts; could not evaluate requirement: The policy could not be \
              evaluated. (error: service unavailable)"
         ));
@@ -729,7 +725,7 @@ mod tests {
             error
                 .to_string()
                 .contains(
-                    "FAILED: Maintained; requirement not met: The crate was recently maintained."
+                    "FAILED: Maintained; requirement: The crate was recently maintained."
                 )
         );
     }

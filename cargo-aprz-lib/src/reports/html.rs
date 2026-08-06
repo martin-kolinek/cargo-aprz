@@ -901,7 +901,7 @@ mod tests {
         let appraisal = Appraisal::required_check_failure(vec![
             ExpressionOutcome::new(
                 "Sound Crate".into(),
-                "The crate is not flagged as unsound.".into(),
+                "The crate must have no RustSec advisory marking it as unsound.".into(),
                 ExpressionDisposition::False,
             ),
         ]);
@@ -937,7 +937,7 @@ mod tests {
     fn test_required_check_failure_uses_normalized_sort_score() {
         let required = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
             "Sound Crate".into(),
-            "The crate is not flagged as unsound.".into(),
+            "The crate must have no RustSec advisory marking it as unsound.".into(),
             ExpressionDisposition::False,
         )]);
         let scored = Appraisal::new(Risk::Low, vec![], 1, 1, 100.0);

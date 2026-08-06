@@ -47,7 +47,7 @@ policy failures from inconclusive evaluations, identify the crate as high risk,
 and state that weighted scoring was not calculated. When console appraisal reasons
 are not rendered, including partial `--console` modes, the error includes
 explicit `FAILED` or `INCONCLUSIVE` labels. Failed checks present their policy
-description as an unmet requirement; inconclusive checks present the description
+description as a direct requirement; inconclusive checks present the description
 as the requirement that could not be evaluated and include the evaluation error.
 This keeps the output actionable without presenting the desired policy condition
 as though it were the reason for rejection. When the console already rendered
