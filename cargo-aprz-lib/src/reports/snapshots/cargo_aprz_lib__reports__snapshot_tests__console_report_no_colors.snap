@@ -67,3 +67,30 @@ Community
 Trustworthiness
   trust.code_coverage_percentage : 78.90
   trust.ci_workflows             : false
+
+═══════════════════════════════════════
+
+required-failed v1.0.0 is appraised as HIGH RISK (1 required check failed; weighted score not calculated)
+  ❌ Required policy: The required condition must hold.
+
+Metadata
+  crate.name    : required-failed
+  crate.version : 1.0.0
+
+═══════════════════════════════════════
+
+required-inconclusive v1.0.0 is appraised as HIGH RISK (1 required check inconclusive; weighted score not calculated)
+  ➖ Required facts: Required facts must be available. (failure to evaluate: provider unavailable)
+
+Metadata
+  crate.name    : required-inconclusive
+  crate.version : 1.0.0
+
+═══════════════════════════════════════
+
+weighted-inconclusive v1.0.0 is appraised as HIGH RISK (1 weighted check inconclusive; weighted score not calculated)
+  ➖ Weighted facts: Weighted facts must be available. (failure to evaluate: provider unavailable)
+
+Metadata
+  crate.name    : weighted-inconclusive
+  crate.version : 1.0.0

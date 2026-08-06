@@ -12,19 +12,19 @@ expression: json_output
           {
             "description": "Excellent coverage",
             "disposition": "passed",
-            "failure_reason": null,
+            "evaluation_error": null,
             "name": "coverage"
           },
           {
             "description": "Active development",
             "disposition": "passed",
-            "failure_reason": null,
+            "evaluation_error": null,
             "name": "active"
           },
           {
             "description": "Well maintained",
             "disposition": "passed",
-            "failure_reason": null,
+            "evaluation_error": null,
             "name": "maintained"
           }
         ],

@@ -1,23 +1,35 @@
 use super::{ExpressionOutcome, Risk};
 
+#[derive(Debug, Clone)]
+enum AppraisalState {
+    Scored {
+        risk: Risk,
+        available_points: u32,
+        awarded_points: u32,
+        score: f64,
+    },
+    RequiredCheckFailure,
+    WeightedEvaluationFailure,
+}
+
 /// The outcome of evaluating a crate against policy expressions.
 #[derive(Debug, Clone)]
 pub struct Appraisal {
-    pub risk: Risk,
-    pub expression_outcomes: Vec<ExpressionOutcome>,
-    pub available_points: u32,
-    pub awarded_points: u32,
-    /// Raw weighted score storage. Use [`Self::weighted_score`] to account for
-    /// evaluation states that do not produce a score.
-    pub score: f64,
+    #[cfg(test)]
+    pub(crate) risk: Risk,
+    pub(crate) expression_outcomes: Vec<ExpressionOutcome>,
+    #[cfg(test)]
+    pub(crate) available_points: u32,
+    #[cfg(test)]
+    pub(crate) awarded_points: u32,
+    #[cfg(test)]
+    pub(crate) score: f64,
+    state: AppraisalState,
 }
 
 impl Appraisal {
-    const REQUIRED_CHECK_FAILURE_SCORE: f64 = -0.0;
-    const WEIGHTED_EVALUATION_FAILURE_SCORE: f64 = -1.0;
-
     #[must_use]
-    pub const fn new(
+    pub(crate) const fn new(
         risk: Risk,
         expression_outcomes: Vec<ExpressionOutcome>,
         available_points: u32,
@@ -25,16 +37,26 @@ impl Appraisal {
         score: f64,
     ) -> Self {
         Self {
+            #[cfg(test)]
             risk,
             expression_outcomes,
+            #[cfg(test)]
             available_points,
+            #[cfg(test)]
             awarded_points,
+            #[cfg(test)]
             score,
+            state: AppraisalState::Scored {
+                risk,
+                available_points,
+                awarded_points,
+                score,
+            },
         }
     }
 
     #[must_use]
-    pub fn required_check_failure(expression_outcomes: Vec<ExpressionOutcome>) -> Self {
+    pub(crate) fn required_check_failure(expression_outcomes: Vec<ExpressionOutcome>) -> Self {
         debug_assert!(
             expression_outcomes
                 .iter()
@@ -42,18 +64,21 @@ impl Appraisal {
             "required-check appraisals must contain a failed or inconclusive outcome"
         );
         Self {
+            #[cfg(test)]
             risk: Risk::High,
             expression_outcomes,
+            #[cfg(test)]
             available_points: 0,
+            #[cfg(test)]
             awarded_points: 0,
-            // Weighted scores are always non-negative. Negative zero preserves
-            // numeric compatibility while recording that scoring was skipped.
-            score: Self::REQUIRED_CHECK_FAILURE_SCORE,
+            #[cfg(test)]
+            score: 0.0,
+            state: AppraisalState::RequiredCheckFailure,
         }
     }
 
     #[must_use]
-    pub fn weighted_evaluation_failure(expression_outcomes: Vec<ExpressionOutcome>) -> Self {
+    pub(crate) fn weighted_evaluation_failure(expression_outcomes: Vec<ExpressionOutcome>) -> Self {
         debug_assert!(
             expression_outcomes.iter().any(|outcome| {
                 matches!(outcome.disposition, super::ExpressionDisposition::Failed(_))
@@ -61,31 +86,57 @@ impl Appraisal {
             "weighted-evaluation failures must contain an inconclusive outcome"
         );
         Self {
+            #[cfg(test)]
             risk: Risk::High,
             expression_outcomes,
+            #[cfg(test)]
             available_points: 0,
+            #[cfg(test)]
             awarded_points: 0,
-            score: Self::WEIGHTED_EVALUATION_FAILURE_SCORE,
+            #[cfg(test)]
+            score: 0.0,
+            state: AppraisalState::WeightedEvaluationFailure,
         }
     }
 
     #[must_use]
-    pub const fn is_required_check_failure(&self) -> bool {
-        self.score.to_bits() == Self::REQUIRED_CHECK_FAILURE_SCORE.to_bits()
+    pub(crate) const fn risk(&self) -> Risk {
+        match self.state {
+            AppraisalState::Scored { risk, .. } => risk,
+            AppraisalState::RequiredCheckFailure | AppraisalState::WeightedEvaluationFailure => {
+                Risk::High
+            }
+        }
     }
 
     #[must_use]
-    pub const fn is_weighted_evaluation_failure(&self) -> bool {
-        self.score.to_bits() == Self::WEIGHTED_EVALUATION_FAILURE_SCORE.to_bits()
+    pub(crate) const fn is_required_check_failure(&self) -> bool {
+        matches!(self.state, AppraisalState::RequiredCheckFailure)
+    }
+
+    #[must_use]
+    pub(crate) const fn is_weighted_evaluation_failure(&self) -> bool {
+        matches!(self.state, AppraisalState::WeightedEvaluationFailure)
     }
 
     /// Returns the weighted score, or `None` when evaluation did not produce one.
     #[must_use]
-    pub const fn weighted_score(&self) -> Option<f64> {
-        if self.is_required_check_failure() || self.is_weighted_evaluation_failure() {
-            None
-        } else {
-            Some(self.score)
+    pub(crate) const fn weighted_score(&self) -> Option<f64> {
+        match self.state {
+            AppraisalState::Scored { score, .. } => Some(score),
+            AppraisalState::RequiredCheckFailure | AppraisalState::WeightedEvaluationFailure => None,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn point_totals(&self) -> Option<(u32, u32)> {
+        match self.state {
+            AppraisalState::Scored {
+                available_points,
+                awarded_points,
+                ..
+            } => Some((awarded_points, available_points)),
+            AppraisalState::RequiredCheckFailure | AppraisalState::WeightedEvaluationFailure => None,
         }
     }
 }
@@ -96,7 +147,7 @@ mod tests {
     use crate::expr::ExpressionDisposition;
 
     #[test]
-    fn test_required_check_failure_records_explicit_state_without_changing_numeric_score() {
+    fn test_required_check_failure_records_explicit_state() {
         let appraisal = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
             "Required".into(),
             "Required policy".into(),
@@ -105,7 +156,8 @@ mod tests {
 
         assert!(appraisal.is_required_check_failure());
         assert_eq!(appraisal.weighted_score(), None);
-        assert_eq!(appraisal.score.to_bits(), (-0.0_f64).to_bits());
+        assert_eq!(appraisal.point_totals(), None);
+        assert_eq!(appraisal.risk(), Risk::High);
     }
 
     #[test]
@@ -124,6 +176,7 @@ mod tests {
 
         assert!(!appraisal.is_required_check_failure());
         assert_eq!(appraisal.weighted_score(), Some(0.0));
+        assert_eq!(appraisal.point_totals(), Some((0, 0)));
     }
 
     #[test]
@@ -137,5 +190,7 @@ mod tests {
         assert!(!appraisal.is_required_check_failure());
         assert!(appraisal.is_weighted_evaluation_failure());
         assert_eq!(appraisal.weighted_score(), None);
+        assert_eq!(appraisal.point_totals(), None);
+        assert_eq!(appraisal.risk(), Risk::High);
     }
 }

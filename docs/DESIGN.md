@@ -74,22 +74,52 @@ Each crate is evaluated in two phases:
    and available points. The percentage score is mapped to low, medium, or high
    risk using configured thresholds.
 
-An expression that cannot be evaluated produces an inconclusive outcome and does
-not contribute points. If positive-weight expressions are configured but every
-one is inconclusive, evaluation fails closed as high risk without a score. An
-empty weighted policy, or a policy containing only zero-weight expressions,
-remains low risk with the neutral score of 100.
+An expression that cannot be evaluated produces an inconclusive outcome. Its
+configured positive weight remains in the available-points denominator but it
+earns no points, so partial provider failure cannot inflate the score by
+silently shrinking the policy. If positive-weight expressions are configured
+but every one is inconclusive, evaluation fails closed as high risk without a
+score. An empty weighted policy, or a policy containing only zero-weight
+expressions, remains low risk with the neutral score of 100.
 
-An appraisal contains the risk classification, every expression outcome, point
-totals, and optional weighted score state. Required-gate failure and total
-weighted-evaluation failure are distinct states even though neither has a score.
+An appraisal stores every expression outcome alongside a private state enum.
+The enum distinguishes a scored appraisal, required-gate failure, and total
+weighted-evaluation failure. Risk, point totals, and score availability are
+derived from that state, preventing invalid combinations and ensuring the two
+unscored states remain distinct.
 
 ## Reporting and rejection
 
 Report generators consume the same crate, metric, and appraisal model to produce
 console, JSON, HTML, CSV, or Excel output. Structured formats retain typed metric
-values. JSON also exposes structured appraisal state and individual outcomes;
-legacy display fields remain for compatibility.
+values. JSON also exposes structured appraisal state and individual outcomes. The
+appraisal object has this contract:
+
+```json
+{
+  "result": "HIGH RISK (...)",
+  "risk": "low | medium | high",
+  "required_check_failure": false,
+  "weighted_evaluation_failure": false,
+  "score": 75.0,
+  "awarded_points": 3,
+  "available_points": 4,
+  "reasons": ["legacy display strings"],
+  "outcomes": [{
+    "name": "check name",
+    "description": "expected policy condition",
+    "disposition": "passed | failed | inconclusive",
+    "evaluation_error": null
+  }]
+}
+```
+
+Scored appraisals have numeric score and point fields with both failure flags
+false. Required-gate failures set only `required_check_failure`; total weighted
+evaluation failures set only `weighted_evaluation_failure`. Both unscored states
+use `null` for score and point fields. `evaluation_error` is non-null only for
+an `inconclusive` outcome. Legacy `result` and `reasons` remain for compatibility,
+while machine consumers should prefer the structured fields.
 
 CSV neutralizes formula-like untrusted text before escaping it. Excel emits
 textual values as string cells. Numeric values remain numeric in both formats.

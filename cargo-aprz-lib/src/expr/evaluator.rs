@@ -17,9 +17,10 @@ use std::sync::Arc;
 /// 2. If ANY high-risk expression is false or fails to evaluate, return HIGH RISK with all outcomes
 /// 3. If no high-risk expressions or all are true, continue to eval expressions
 /// 4. Evaluate ALL `eval` expressions, summing granted vs possible points
-/// 5. If every weighted expression fails to evaluate, return HIGH RISK without a score
-/// 6. Compute score = granted / possible * 100, compare against thresholds
-/// 7. If no expressions defined, returns LOW RISK with score 100
+/// 5. Count inconclusive positive-weight checks as available but unawarded points
+/// 6. If every positive-weight expression fails to evaluate, return HIGH RISK without a score
+/// 7. Compute score = granted / configured points * 100, compare against thresholds
+/// 8. If no expressions defined, returns LOW RISK with score 100
 ///
 /// Expression evaluation failures are captured as [`ExpressionDisposition::Failed`]
 /// rather than causing the function to fail.
@@ -69,20 +70,22 @@ pub fn evaluate(
     let mut available_points: u32 = 0;
     let mut awarded_points: u32 = 0;
     let has_weighted_points = eval.iter().any(|expr| expr.points().unwrap_or(1) > 0);
+    let mut evaluated_positive_weight = false;
     let mut outcomes = high_risk_outcomes;
     outcomes.reserve(eval.len());
 
     for expr in eval {
         let points = expr.points().unwrap_or(1);
+        available_points += points;
 
         let disposition = match evaluate_expression(expr.program(), expr.name(), &context) {
             Ok(true) => {
                 awarded_points += points;
-                available_points += points;
+                evaluated_positive_weight |= points > 0;
                 ExpressionDisposition::True
             }
             Ok(false) => {
-                available_points += points;
+                evaluated_positive_weight |= points > 0;
                 ExpressionDisposition::False
             },
             Err(e) => ExpressionDisposition::Failed(e),
@@ -95,7 +98,7 @@ pub fn evaluate(
     }
 
     if has_weighted_points
-        && available_points == 0
+        && !evaluated_positive_weight
         && outcomes
             .iter()
             .any(|outcome| matches!(outcome.disposition, ExpressionDisposition::Failed(_)))
@@ -746,18 +749,44 @@ mod tests {
 
     #[test]
     #[cfg_attr(miri, ignore)]
-    fn test_points_failed_expression_not_counted() {
-        // A failed expression should not contribute to available or awarded points
+    fn test_points_failed_expression_counts_as_unawarded_configured_points() {
         let e1 = Expression::new("e1", None, "stars > 100", Some(5)).unwrap();
         let e2 = Expression::new("e2", None, "undefined_var > 0", Some(5)).unwrap();
         let metrics = vec![Metric::with_value(&STARS_DEF, MetricValue::UInt(150))];
         let outcome = evaluate(&[], &[e1, e2], &metrics, test_timestamp(), MEDIUM_THRESHOLD, LOW_THRESHOLD);
-        // Only e1's 5 points should be counted
-        assert_eq!(outcome.available_points, 5);
+        assert_eq!(outcome.available_points, 10);
         assert_eq!(outcome.awarded_points, 5);
-        assert!((outcome.score - 100.0).abs() < 0.001);
-        assert_eq!(outcome.risk, Risk::Low);
+        assert!((outcome.score - 50.0).abs() < 0.001);
+        assert_eq!(outcome.risk, Risk::Medium);
         assert!(matches!(outcome.expression_outcomes[1].disposition, ExpressionDisposition::Failed(_)));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_mostly_inconclusive_policy_cannot_report_a_perfect_score() {
+        let mut expressions = vec![
+            Expression::new("passing", None, "stars > 100", Some(10)).unwrap(),
+        ];
+        for index in 0..9 {
+            let name = format!("inconclusive-{index}");
+            let expression = format!("undefined_{index} > 0");
+            expressions.push(Expression::new(&name, None, &expression, Some(10)).unwrap());
+        }
+        let metrics = vec![Metric::with_value(&STARS_DEF, MetricValue::UInt(150))];
+
+        let outcome = evaluate(
+            &[],
+            &expressions,
+            &metrics,
+            test_timestamp(),
+            MEDIUM_THRESHOLD,
+            LOW_THRESHOLD,
+        );
+
+        assert_eq!(outcome.point_totals(), Some((10, 100)));
+        assert_eq!(outcome.weighted_score(), Some(10.0));
+        assert_eq!(outcome.risk(), Risk::High);
+        assert!(!outcome.is_weighted_evaluation_failure());
     }
 
     #[test]

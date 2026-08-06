@@ -193,23 +193,26 @@ expression: output
   </div>
   <div class="summary-row">
     <div class="summary">
-      <div class="summary-card total" role="button" tabindex="0" onclick="toggleRiskList('all')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRiskList('all')}"><div class="label">Total Crates</div><div class="value">3</div></div>
-      <div class="summary-card high" role="button" tabindex="0" onclick="toggleRiskList('high')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRiskList('high')}"><div class="label">High Risk</div><div class="value">1</div></div>
+      <div class="summary-card total" role="button" tabindex="0" onclick="toggleRiskList('all')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRiskList('all')}"><div class="label">Total Crates</div><div class="value">6</div></div>
+      <div class="summary-card high" role="button" tabindex="0" onclick="toggleRiskList('high')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRiskList('high')}"><div class="label">High Risk</div><div class="value">4</div></div>
       <div class="summary-card medium" role="button" tabindex="0" onclick="toggleRiskList('medium')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRiskList('medium')}"><div class="label">Medium Risk</div><div class="value">0</div></div>
       <div class="summary-card low" role="button" tabindex="0" onclick="toggleRiskList('low')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRiskList('low')}"><div class="label">Low Risk</div><div class="value">1</div></div>
       <div class="summary-card not-eval" role="button" tabindex="0" onclick="toggleRiskList('not-eval')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRiskList('not-eval')}"><div class="label">Not Evaluated</div><div class="value">1</div></div>
     </div>
       <svg class="pie-chart" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 80,80 L 80.00,8.00 A 72,72 0 0,1 142.35,116.00 Z" fill="var(--risk-high)" stroke="var(--bg-color)" stroke-width="1"/>
-        <path d="M 80,80 L 142.35,116.00 A 72,72 0 0,1 17.65,116.00 Z" fill="var(--risk-low)" stroke="var(--bg-color)" stroke-width="1"/>
-        <path d="M 80,80 L 17.65,116.00 A 72,72 0 0,1 80.00,8.00 Z" fill="var(--risk-not-eval)" stroke="var(--bg-color)" stroke-width="1"/>
+        <path d="M 80,80 L 80.00,8.00 A 72,72 0 1,1 17.65,116.00 Z" fill="var(--risk-high)" stroke="var(--bg-color)" stroke-width="1"/>
+        <path d="M 80,80 L 17.65,116.00 A 72,72 0 0,1 17.65,44.00 Z" fill="var(--risk-low)" stroke="var(--bg-color)" stroke-width="1"/>
+        <path d="M 80,80 L 17.65,44.00 A 72,72 0 0,1 80.00,8.00 Z" fill="var(--risk-not-eval)" stroke="var(--bg-color)" stroke-width="1"/>
         <circle class="pie-border" cx="80" cy="80" r="72" fill="none"/>
       </svg>
   </div>
   <details id="risk-high" class="risk-list high" open>
-    <summary>1 High Risk Crate<span class="sort-controls"><button type="button" class="sort-btn" onclick="sortCrates(this, 'alpha', event)" title="Sort A–Z">A–Z</button><button type="button" class="sort-btn active" onclick="sortCrates(this, 'score', event)" title="Sort by score">Score</button></span></summary>
+    <summary>4 High Risk Crates<span class="sort-controls"><button type="button" class="sort-btn" onclick="sortCrates(this, 'alpha', event)" title="Sort A–Z">A–Z</button><button type="button" class="sort-btn active" onclick="sortCrates(this, 'score', event)" title="Sort by score">Score</button></span></summary>
     <div class="crate-names">
       <a href="#crate-serde-1.0.195" onclick="selectCrate('crate-serde-1.0.195', this, event)" title="serde v1.0.195" data-name="serde" data-score="0"><span class="crate-name active">serde</span></a>
+      <a href="#crate-required-failed-1.0.0" onclick="selectCrate('crate-required-failed-1.0.0', this, event)" title="required-failed v1.0.0" data-name="required-failed" data-score="0"><span class="crate-name">required-failed</span></a>
+      <a href="#crate-required-inconclusive-1.0.0" onclick="selectCrate('crate-required-inconclusive-1.0.0', this, event)" title="required-inconclusive v1.0.0" data-name="required-inconclusive" data-score="0"><span class="crate-name">required-inconclusive</span></a>
+      <a href="#crate-weighted-inconclusive-1.0.0" onclick="selectCrate('crate-weighted-inconclusive-1.0.0', this, event)" title="weighted-inconclusive v1.0.0" data-name="weighted-inconclusive" data-score="0"><span class="crate-name">weighted-inconclusive</span></a>
     </div>
   </details>
   <details id="risk-low" class="risk-list low">
@@ -251,7 +254,7 @@ expression: output
           <tr>
             <td>high_stars</td>
             <td><span class="disposition passed">PASSED</span></td>
-            <td>High stars and good coverage</td>
+            <td></td>
           </tr>
           </tbody>
           </table>
@@ -490,6 +493,138 @@ expression: output
             <tr>
               <td title="Whether CI is configured">trust.ci_workflows</td>
               <td>false</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </div>
+    <div class="crate-card" id="crate-required-failed-1.0.0" style="display:none">
+      <div class="crate-card-header risk-high">
+        <span class="crate-title">required-failed v1.0.0</span>
+        <span class="spacer"></span>
+        <span class="header-right">
+          <span class="appraisal-score">1 required check failed · weighted score not calculated</span>
+          <span class="risk-badge high">HIGH RISK</span>
+        </span>
+      </div>
+      <div class="tabs">
+        <div class="tab-nav">
+          <button class="tab-btn active" data-tab="card-3-appraisal" onclick="switchTab(this)">Appraisal</button>
+          <button class="tab-btn" data-tab="card-3-Metadata" onclick="switchTab(this)">Metadata</button>
+        </div>
+        <div class="tab-panels">
+        <div class="tab-panel active" id="card-3-appraisal">
+          <table>
+          <thead><tr><th>Expression</th><th>Result</th><th>Details</th></tr></thead>
+          <tbody>
+          <tr>
+            <td>Required policy</td>
+            <td><span class="disposition failed">FAILED</span></td>
+            <td>The required condition must hold.</td>
+          </tr>
+          </tbody>
+          </table>
+        </div>
+        <div class="tab-panel" id="card-3-Metadata">
+          <table>
+            <tbody>
+            <tr>
+              <td title="Name of the crate">crate.name</td>
+              <td><a href="https://crates.io/crates/required-failed/1.0.0" target="_blank" rel="noopener noreferrer">required-failed</a></td>
+            </tr>
+            <tr>
+              <td title="Version of the crate">crate.version</td>
+              <td>1.0.0</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </div>
+    <div class="crate-card" id="crate-required-inconclusive-1.0.0" style="display:none">
+      <div class="crate-card-header risk-high">
+        <span class="crate-title">required-inconclusive v1.0.0</span>
+        <span class="spacer"></span>
+        <span class="header-right">
+          <span class="appraisal-score">1 required check inconclusive · weighted score not calculated</span>
+          <span class="risk-badge high">HIGH RISK</span>
+        </span>
+      </div>
+      <div class="tabs">
+        <div class="tab-nav">
+          <button class="tab-btn active" data-tab="card-4-appraisal" onclick="switchTab(this)">Appraisal</button>
+          <button class="tab-btn" data-tab="card-4-Metadata" onclick="switchTab(this)">Metadata</button>
+        </div>
+        <div class="tab-panels">
+        <div class="tab-panel active" id="card-4-appraisal">
+          <table>
+          <thead><tr><th>Expression</th><th>Result</th><th>Details</th></tr></thead>
+          <tbody>
+          <tr>
+            <td>Required facts</td>
+            <td><span class="disposition inconclusive">INCONCLUSIVE</span></td>
+            <td>Required facts must be available.<br><strong>Evaluation error:</strong> provider unavailable</td>
+          </tr>
+          </tbody>
+          </table>
+        </div>
+        <div class="tab-panel" id="card-4-Metadata">
+          <table>
+            <tbody>
+            <tr>
+              <td title="Name of the crate">crate.name</td>
+              <td><a href="https://crates.io/crates/required-inconclusive/1.0.0" target="_blank" rel="noopener noreferrer">required-inconclusive</a></td>
+            </tr>
+            <tr>
+              <td title="Version of the crate">crate.version</td>
+              <td>1.0.0</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </div>
+    <div class="crate-card" id="crate-weighted-inconclusive-1.0.0" style="display:none">
+      <div class="crate-card-header risk-high">
+        <span class="crate-title">weighted-inconclusive v1.0.0</span>
+        <span class="spacer"></span>
+        <span class="header-right">
+          <span class="appraisal-score">1 weighted check inconclusive · weighted score not calculated</span>
+          <span class="risk-badge high">HIGH RISK</span>
+        </span>
+      </div>
+      <div class="tabs">
+        <div class="tab-nav">
+          <button class="tab-btn active" data-tab="card-5-appraisal" onclick="switchTab(this)">Appraisal</button>
+          <button class="tab-btn" data-tab="card-5-Metadata" onclick="switchTab(this)">Metadata</button>
+        </div>
+        <div class="tab-panels">
+        <div class="tab-panel active" id="card-5-appraisal">
+          <table>
+          <thead><tr><th>Expression</th><th>Result</th><th>Details</th></tr></thead>
+          <tbody>
+          <tr>
+            <td>Weighted facts</td>
+            <td><span class="disposition inconclusive">INCONCLUSIVE</span></td>
+            <td>Weighted facts must be available.<br><strong>Evaluation error:</strong> provider unavailable</td>
+          </tr>
+          </tbody>
+          </table>
+        </div>
+        <div class="tab-panel" id="card-5-Metadata">
+          <table>
+            <tbody>
+            <tr>
+              <td title="Name of the crate">crate.name</td>
+              <td><a href="https://crates.io/crates/weighted-inconclusive/1.0.0" target="_blank" rel="noopener noreferrer">weighted-inconclusive</a></td>
+            </tr>
+            <tr>
+              <td title="Version of the crate">crate.version</td>
+              <td>1.0.0</td>
             </tr>
             </tbody>
           </table>

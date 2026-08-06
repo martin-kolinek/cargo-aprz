@@ -12,7 +12,7 @@ expression: output
           {
             "description": "High stars and good coverage",
             "disposition": "passed",
-            "failure_reason": null,
+            "evaluation_error": null,
             "name": "high_stars"
           }
         ],
@@ -49,7 +49,7 @@ expression: output
           {
             "description": "Low star count",
             "disposition": "failed",
-            "failure_reason": null,
+            "evaluation_error": null,
             "name": "low_stars"
           }
         ],
@@ -93,6 +93,90 @@ expression: output
       },
       "name": "anyhow",
       "version": "1.0.75"
+    },
+    {
+      "appraisal": {
+        "available_points": null,
+        "awarded_points": null,
+        "outcomes": [
+          {
+            "description": "The required condition must hold.",
+            "disposition": "failed",
+            "evaluation_error": null,
+            "name": "Required policy"
+          }
+        ],
+        "reasons": [
+          "Required policy"
+        ],
+        "required_check_failure": true,
+        "result": "HIGH RISK (1 required check failed; weighted score not calculated)",
+        "risk": "high",
+        "score": null,
+        "weighted_evaluation_failure": false
+      },
+      "metrics": {
+        "crate.name": "required-failed",
+        "crate.version": "1.0.0"
+      },
+      "name": "required-failed",
+      "version": "1.0.0"
+    },
+    {
+      "appraisal": {
+        "available_points": null,
+        "awarded_points": null,
+        "outcomes": [
+          {
+            "description": "Required facts must be available.",
+            "disposition": "inconclusive",
+            "evaluation_error": "provider unavailable",
+            "name": "Required facts"
+          }
+        ],
+        "reasons": [
+          "Required facts (failure to evaluate: provider unavailable)"
+        ],
+        "required_check_failure": true,
+        "result": "HIGH RISK (1 required check inconclusive; weighted score not calculated)",
+        "risk": "high",
+        "score": null,
+        "weighted_evaluation_failure": false
+      },
+      "metrics": {
+        "crate.name": "required-inconclusive",
+        "crate.version": "1.0.0"
+      },
+      "name": "required-inconclusive",
+      "version": "1.0.0"
+    },
+    {
+      "appraisal": {
+        "available_points": null,
+        "awarded_points": null,
+        "outcomes": [
+          {
+            "description": "Weighted facts must be available.",
+            "disposition": "inconclusive",
+            "evaluation_error": "provider unavailable",
+            "name": "Weighted facts"
+          }
+        ],
+        "reasons": [
+          "Weighted facts (failure to evaluate: provider unavailable)"
+        ],
+        "required_check_failure": false,
+        "result": "HIGH RISK (1 weighted check inconclusive; weighted score not calculated)",
+        "risk": "high",
+        "score": null,
+        "weighted_evaluation_failure": true
+      },
+      "metrics": {
+        "crate.name": "weighted-inconclusive",
+        "crate.version": "1.0.0"
+      },
+      "name": "weighted-inconclusive",
+      "version": "1.0.0"
     }
   ]
 }

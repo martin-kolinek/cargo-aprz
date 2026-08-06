@@ -84,6 +84,9 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
 }
 
 fn is_textual_metric_value(value: &MetricValue) -> bool {
+    // Mixed and nested lists are textual if any element is textual, because
+    // the complete rendered list occupies one spreadsheet cell and must cross
+    // the same trust boundary as a standalone string.
     match value {
         MetricValue::String(_) => true,
         MetricValue::List(values) => values.iter().any(is_textual_metric_value),
@@ -92,6 +95,12 @@ fn is_textual_metric_value(value: &MetricValue) -> bool {
 }
 
 /// Prevent spreadsheet software from interpreting untrusted text as a formula.
+///
+/// Spreadsheet engines can ignore leading whitespace before `=`, `+`, `-`, or
+/// `@`, so inspect the first non-whitespace character and prefix an apostrophe
+/// before applying ordinary CSV escaping. Numeric-only metrics intentionally
+/// bypass this helper to preserve numeric cell types. See docs/DESIGN.md and
+/// OWASP's CSV Injection guidance.
 fn escape_csv_untrusted(s: &str) -> Cow<'_, str> {
     if s.trim_start().starts_with(['=', '+', '-', '@']) {
         let mut neutralized = String::with_capacity(s.len() + 1);
@@ -295,16 +304,16 @@ mod tests {
 
     #[test]
     fn test_generate_single_crate_with_evaluation() {
-        let eval = Appraisal {
-            risk: Risk::Low,
-            expression_outcomes: vec![
+        let eval = Appraisal::new(
+            Risk::Low,
+            vec![
                 ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True),
                 ExpressionOutcome::new("quality".into(), "Quality".into(), ExpressionDisposition::True),
             ],
-            available_points: 2,
-            awarded_points: 2,
-            score: 100.0,
-        };
+            2,
+            2,
+            100.0,
+        );
         let crates = vec![create_test_crate("test_crate", "1.0.0", Some(eval))];
         let mut output = String::new();
         let result = generate(&crates, &mut output);
@@ -315,17 +324,17 @@ mod tests {
 
     #[test]
     fn test_generate_escapes_expression_description_as_regular_csv_text() {
-        let eval = Appraisal {
-            risk: Risk::High,
-            expression_outcomes: vec![ExpressionOutcome::new(
+        let eval = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
                 "Policy".into(),
                 "=HYPERLINK(\"https://example.invalid\")".into(),
                 ExpressionDisposition::False,
             )],
-            available_points: 1,
-            awarded_points: 0,
-            score: 0.0,
-        };
+            1,
+            0,
+            0.0,
+        );
         let crates = vec![create_test_crate("test_crate", "1.0.0", Some(eval))];
         let mut output = String::new();
 
@@ -350,13 +359,17 @@ mod tests {
 
     #[test]
     fn test_generate_with_special_characters() {
-        let eval = Appraisal {
-            risk: Risk::Low,
-            expression_outcomes: vec![ExpressionOutcome::new("quotes".into(), "Reason with \"quotes\"".into(), ExpressionDisposition::True)],
-            available_points: 1,
-            awarded_points: 1,
-            score: 100.0,
-        };
+        let eval = Appraisal::new(
+            Risk::Low,
+            vec![ExpressionOutcome::new(
+                "quotes".into(),
+                "Reason with \"quotes\"".into(),
+                ExpressionDisposition::True,
+            )],
+            1,
+            1,
+            100.0,
+        );
         let crates = vec![create_test_crate("test,\"crate\"", "1.0.0", Some(eval))];
         let mut output = String::new();
         let result = generate(&crates, &mut output);
@@ -367,13 +380,17 @@ mod tests {
 
     #[test]
     fn test_generate_denied_status() {
-        let eval = Appraisal {
-            risk: Risk::High,
-            expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
-            available_points: 1,
-            awarded_points: 0,
-            score: 0.0,
-        };
+        let eval = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
+                "security".into(),
+                "Security issue".into(),
+                ExpressionDisposition::False,
+            )],
+            1,
+            0,
+            0.0,
+        );
         let crates = vec![create_test_crate("bad_crate", "1.0.0", Some(eval))];
         let mut output = String::new();
         let result = generate(&crates, &mut output);

@@ -62,8 +62,8 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
         worksheet.write_string_with_format(row, 0, "Appraisals", &bold_format)?;
         for (col_idx, crate_info) in crates.iter().enumerate() {
             if let Some(eval) = &crate_info.appraisal {
-                let value = common::format_appraisal_status(eval);
-                let format = match eval.risk {
+                let (value, _) = appraisal_cell_values(eval);
+                let format = match eval.risk() {
                     Risk::Low => &low_risk_format,
                     Risk::Medium => &medium_risk_format,
                     Risk::High => &high_risk_format,
@@ -76,8 +76,7 @@ fn generate_with_context<W: Write>(crates: &[ReportableCrate], ctx: &ReportConte
 
         // Reasons row
         worksheet.write_string_with_format(row, 0, "Reasons", &bold_format)?;
-        write_eval_row(worksheet, row, crates, |eval| common::join_with(
-            eval.expression_outcomes.iter().map(common::outcome_icon_name), "; "))?;
+        write_eval_row(worksheet, row, crates, |eval| appraisal_cell_values(eval).1)?;
         row += 1;
 
         // Add blank row after evaluation
@@ -175,6 +174,19 @@ fn write_metric_value(
     Ok(())
 }
 
+fn appraisal_cell_values(appraisal: &Appraisal) -> (String, String) {
+    (
+        common::format_appraisal_status(appraisal),
+        common::join_with(
+            appraisal
+                .expression_outcomes
+                .iter()
+                .map(common::outcome_icon_name),
+            "; ",
+        ),
+    )
+}
+
 /// Helper function to write a evaluation row (Status or Reasons)
 #[expect(unused_results, reason = "rust_xlsxwriter methods return &mut Worksheet for chaining")]
 fn write_eval_row<F>(worksheet: &mut rust_xlsxwriter::Worksheet, row: u32, crates: &[ReportableCrate], extract_value: F) -> Result<()>
@@ -249,19 +261,43 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore = "Miri cannot call GetSystemTimePreciseAsFileTime (rust_xlsxwriter)")]
     fn test_generate_single_crate_with_evaluation() {
-        let eval = Appraisal {
-            risk: Risk::Low,
-            expression_outcomes: vec![ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True)],
-            available_points: 1,
-            awarded_points: 1,
-            score: 100.0,
-        };
+        let eval = Appraisal::new(
+            Risk::Low,
+            vec![ExpressionOutcome::new(
+                "good".into(),
+                "Good".into(),
+                ExpressionDisposition::True,
+            )],
+            1,
+            1,
+            100.0,
+        );
         let crates = vec![create_test_crate("test_crate", "1.0.0", Some(eval))];
         let mut output = Vec::new();
         let result = generate(&crates, &mut output);
         result.unwrap();
         assert!(!output.is_empty());
         assert_eq!(&output[0..2], b"PK");
+    }
+
+    #[test]
+    fn test_appraisal_cell_values_preserve_unscored_state_and_inconclusive_details() {
+        let required = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
+            "Required facts".into(),
+            "Facts must be available.".into(),
+            ExpressionDisposition::Failed("service unavailable".into()),
+        )]);
+
+        let (status, reasons) = appraisal_cell_values(&required);
+
+        assert_eq!(
+            status,
+            "HIGH RISK (1 required check inconclusive; weighted score not calculated)"
+        );
+        assert_eq!(
+            reasons,
+            "➖ Required facts: Facts must be available. (failure to evaluate: service unavailable)"
+        );
     }
 
     #[test]
@@ -282,13 +318,17 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore = "Miri cannot call GetSystemTimePreciseAsFileTime (rust_xlsxwriter)")]
     fn test_generate_denied_status() {
-        let eval = Appraisal {
-            risk: Risk::High,
-            expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
-            available_points: 1,
-            awarded_points: 0,
-            score: 0.0,
-        };
+        let eval = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
+                "security".into(),
+                "Security issue".into(),
+                ExpressionDisposition::False,
+            )],
+            1,
+            0,
+            0.0,
+        );
         let crates = vec![create_test_crate("bad_crate", "1.0.0", Some(eval))];
         let mut output = Vec::new();
         let result = generate(&crates, &mut output);

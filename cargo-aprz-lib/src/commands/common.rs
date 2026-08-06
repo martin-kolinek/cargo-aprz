@@ -442,7 +442,11 @@ fn check_risk_errors(
     error_if_high_risk: bool,
     include_check_details: bool,
 ) -> Result<()> {
+    // Keep the final error within a practical CI-log footprint while showing
+    // enough independent failures to reveal whether rejection is widespread.
     const MAX_REJECTED_CRATES: usize = 20;
+    // Per-crate detail is capped separately so one dependency cannot crowd out
+    // diagnostics for the other blocking crates. See docs/DESIGN.md.
     const MAX_OUTCOMES_PER_CRATE: usize = 10;
 
     let rejected_risks: fn(Risk) -> bool = if error_if_medium_risk {
@@ -459,7 +463,7 @@ fn check_risk_errors(
             crate_info
                 .appraisal
                 .as_ref()
-                .is_some_and(|appraisal| rejected_risks(appraisal.risk))
+                .is_some_and(|appraisal| rejected_risks(appraisal.risk()))
                 && !config.is_allowed(&crate_info.name, &crate_info.version)
         })
         .collect();
@@ -489,7 +493,7 @@ fn check_risk_errors(
             let _ = write!(
                 message,
                 ": {} (weighted score not calculated)",
-                appraisal.risk
+                appraisal.risk()
             );
             details_were_capped |= append_non_passing_outcomes(
                 &mut message,
@@ -500,7 +504,7 @@ fn check_risk_errors(
                 "required checks",
             );
         } else if let Some(score) = appraisal.weighted_score() {
-            let _ = write!(message, ": {} (score {score:.0})", appraisal.risk);
+            let _ = write!(message, ": {} (score {score:.0})", appraisal.risk());
             if include_check_details {
                 details_were_capped |= append_non_passing_outcomes(
                     &mut message,
@@ -515,7 +519,7 @@ fn check_risk_errors(
             let _ = write!(
                 message,
                 ": {} (weighted score not calculated)",
-                appraisal.risk
+                appraisal.risk()
             );
             if include_check_details {
                 details_were_capped |= append_non_passing_outcomes(
@@ -546,7 +550,7 @@ fn check_risk_errors(
     }
 
     message.push_str(
-        "\nReview the failed checks and remediate, upgrade, or replace the affected dependencies. \
+        "\nReview the non-passing checks and remediate, upgrade, or replace the affected dependencies. \
          To acknowledge a temporary exception, add the exact crate name and version to [[allow_list]] in aprz.toml.",
     );
 

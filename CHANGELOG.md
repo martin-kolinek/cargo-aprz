@@ -7,8 +7,8 @@
 - Updated dependencies
 - Explain required-check failures with their high-risk label and without displaying
   a misleading zero-out-of-zero score
-- Fail closed as high risk when every configured weighted check fails to evaluate,
-  instead of reporting a perfect score
+- Count inconclusive positive-weight checks as unawarded configured points, and
+  fail closed without a score when every positive-weight check is inconclusive
 - Include policy descriptions in expression output and list blocking crates in risk-check errors
 - Neutralize formula-like textual metric values in CSV reports; this prefixes
   an apostrophe for any text whose first non-whitespace character is `=`, `+`,

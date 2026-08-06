@@ -192,7 +192,8 @@ language that allows you to write potentially complex boolean expressions that o
 - high_risk: All expressions must evaluate to `true`. If any evaluates to `false`, the crate is flagged as high risk.
 
 - eval: Each expression has a point value (default 1). All expressions are evaluated and a score is
-  computed as `granted_points / total_points * 100`. The score is compared against configurable
+  computed as `granted_points / configured_points * 100`. A check that cannot be evaluated remains
+  in the configured-points denominator but earns no points. The score is compared against configurable
   thresholds (`medium_risk_threshold` and `low_risk_threshold`) to determine whether the crate is
   low, medium, or high risk.
 
@@ -201,6 +202,9 @@ When a `high_risk` check fails, weighted expressions are skipped and the report 
 score was not calculated rather than displaying a misleading zero-out-of-zero score. Expression
 output includes descriptions for failed or inconclusive checks to explain the policy requirement;
 passing checks remain name-only.
+If every positive-weight `eval` check is inconclusive, evaluation also fails closed as high risk
+without a score. Empty weighted policies and policies containing only zero-weight checks retain
+the neutral low-risk score of 100.
 
 Within these expressions, you can refer to any of the collected metrics. For example, you could write an expression that says
 "the crate must have 100 or fewer open issues to avoid being flagged as high risk":
@@ -257,8 +261,11 @@ version = "^2.0"
 
 Version requirements use standard semver syntax such as `"*"` (any version), `"=1.2.3"` (exact),
 `"^1.2"` (compatible), `"~1.2"` (patch-level), or `">=1.0, <2.0"` (range).
-When a risk flag rejects the command, the final error lists every blocking crate and its failed
-checks. Remediate, upgrade, or replace the affected dependency where possible. Use an exact-version
+When a risk flag rejects the command, the final error includes an item-limited set of blocking
+crates and failed or inconclusive checks unless the console already rendered complete appraisal
+reasons. Up to 20 crates and 10 non-passing checks per crate are shown; when anything is omitted,
+use `--console appraisal,reasons` or `--json <path>` for the complete appraisal. Remediate, upgrade,
+or replace the affected dependency where possible. Use an exact-version
 allow-list entry only to acknowledge a temporary exception; the crate remains visible in reports.
 
 ## Troubleshooting

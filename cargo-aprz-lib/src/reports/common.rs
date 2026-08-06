@@ -102,7 +102,7 @@ pub const fn format_risk_status(risk: Risk) -> &'static str {
 }
 
 /// Return policy-failure and inconclusive counts when weighted scoring was skipped.
-pub fn required_check_counts(appraisal: &Appraisal) -> (usize, usize) {
+fn required_check_counts(appraisal: &Appraisal) -> (usize, usize) {
     if !appraisal.is_required_check_failure() {
         return (0, 0);
     }
@@ -118,12 +118,12 @@ pub fn required_check_counts(appraisal: &Appraisal) -> (usize, usize) {
 }
 
 /// Format the details of an appraisal without its risk label.
-pub fn format_appraisal_details(appraisal: &Appraisal) -> String {
+fn format_appraisal_details(appraisal: &Appraisal) -> String {
     format_appraisal_details_with_separator(appraisal, "; ")
 }
 
 /// Format appraisal details using the requested separator before skipped-score text.
-pub fn format_appraisal_details_with_separator(appraisal: &Appraisal, separator: &str) -> String {
+pub(super) fn format_appraisal_details_with_separator(appraisal: &Appraisal, separator: &str) -> String {
     if appraisal.is_required_check_failure() {
         let (failed, inconclusive) = required_check_counts(appraisal);
         let summary = match (failed, inconclusive) {
@@ -158,13 +158,16 @@ pub fn format_appraisal_details_with_separator(appraisal: &Appraisal, separator:
         return format!("{summary}{separator}weighted score not calculated");
     }
 
+    let (awarded_points, available_points) = appraisal
+        .point_totals()
+        .expect("scored appraisals have point totals");
     format!(
         "score = {:.0}, awarded points = {}, available points = {}",
         appraisal
             .weighted_score()
             .expect("scored appraisals have a weighted score"),
-        appraisal.awarded_points,
-        appraisal.available_points,
+        awarded_points,
+        available_points,
     )
 }
 
@@ -172,7 +175,7 @@ pub fn format_appraisal_details_with_separator(appraisal: &Appraisal, separator:
 pub fn format_appraisal_status(appraisal: &Appraisal) -> String {
     format!(
         "{} ({})",
-        format_risk_status(appraisal.risk),
+        format_risk_status(appraisal.risk()),
         format_appraisal_details(appraisal)
     )
 }
@@ -186,12 +189,14 @@ pub const fn outcome_icon(outcome: &ExpressionOutcome) -> &'static str {
     }
 }
 
-/// Returns a displayable `icon + name` value (no allocation until formatted).
+/// Returns a displayable outcome: passing checks show icon and name, policy
+/// failures add the expected condition, and inconclusive checks add the
+/// expected condition and evaluation error.
 pub const fn outcome_icon_name(outcome: &ExpressionOutcome) -> IconName<'_> {
     IconName(outcome)
 }
 
-/// A zero-allocation wrapper that displays `icon + name` for an [`ExpressionOutcome`].
+/// A zero-allocation wrapper for the disposition-specific outcome text.
 #[derive(Debug)]
 pub struct IconName<'a>(&'a ExpressionOutcome);
 
@@ -477,16 +482,6 @@ mod tests {
         assert_eq!(
             format_appraisal_details_with_separator(&appraisal, " · "),
             "1 required check failed · weighted score not calculated"
-        );
-    }
-
-    #[test]
-    fn test_format_appraisal_details_handles_missing_failure_outcome() {
-        let appraisal = Appraisal::new(Risk::High, vec![], 0, 0, -0.0);
-
-        assert_eq!(
-            format_appraisal_details(&appraisal),
-            "required check failed (details unavailable); weighted score not calculated"
         );
     }
 

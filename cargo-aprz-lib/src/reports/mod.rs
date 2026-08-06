@@ -121,6 +121,10 @@ mod snapshot_tests {
         default_value: || None,
     };
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "The shared fixture intentionally covers the complete appraisal-state matrix"
+    )]
     fn create_test_crates() -> Vec<ReportableCrate> {
         let created_at = Utc.with_ymd_and_hms(2023, 1, 15, 10, 30, 0).unwrap();
 
@@ -175,6 +179,60 @@ mod snapshot_tests {
                     ),
                 ],
                 None,
+            ),
+            ReportableCrate::new(
+                "required-failed".into(),
+                Arc::new(Version::parse("1.0.0").unwrap()),
+                vec![
+                    Metric::with_value(
+                        &NAME_DEF,
+                        MetricValue::String("required-failed".into()),
+                    ),
+                    Metric::with_value(&VERSION_DEF, MetricValue::String("1.0.0".into())),
+                ],
+                Some(Appraisal::required_check_failure(vec![
+                    ExpressionOutcome::new(
+                        "Required policy".into(),
+                        "The required condition must hold.".into(),
+                        ExpressionDisposition::False,
+                    ),
+                ])),
+            ),
+            ReportableCrate::new(
+                "required-inconclusive".into(),
+                Arc::new(Version::parse("1.0.0").unwrap()),
+                vec![
+                    Metric::with_value(
+                        &NAME_DEF,
+                        MetricValue::String("required-inconclusive".into()),
+                    ),
+                    Metric::with_value(&VERSION_DEF, MetricValue::String("1.0.0".into())),
+                ],
+                Some(Appraisal::required_check_failure(vec![
+                    ExpressionOutcome::new(
+                        "Required facts".into(),
+                        "Required facts must be available.".into(),
+                        ExpressionDisposition::Failed("provider unavailable".into()),
+                    ),
+                ])),
+            ),
+            ReportableCrate::new(
+                "weighted-inconclusive".into(),
+                Arc::new(Version::parse("1.0.0").unwrap()),
+                vec![
+                    Metric::with_value(
+                        &NAME_DEF,
+                        MetricValue::String("weighted-inconclusive".into()),
+                    ),
+                    Metric::with_value(&VERSION_DEF, MetricValue::String("1.0.0".into())),
+                ],
+                Some(Appraisal::weighted_evaluation_failure(vec![
+                    ExpressionOutcome::new(
+                        "Weighted facts".into(),
+                        "Weighted facts must be available.".into(),
+                        ExpressionDisposition::Failed("provider unavailable".into()),
+                    ),
+                ])),
             ),
         ]
     }

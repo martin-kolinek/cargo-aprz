@@ -20,7 +20,7 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
             eval_obj.insert("result".into(), json!(common::format_appraisal_status(appraisal)));
             eval_obj.insert(
                 "risk".into(),
-                json!(match appraisal.risk {
+                json!(match appraisal.risk() {
                     Risk::Low => "low",
                     Risk::Medium => "medium",
                     Risk::High => "high",
@@ -35,16 +35,10 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
                 json!(appraisal.is_weighted_evaluation_failure()),
             );
             let weighted_score = appraisal.weighted_score();
-            let score_was_calculated = weighted_score.is_some();
             eval_obj.insert("score".into(), weighted_score.into());
-            eval_obj.insert(
-                "awarded_points".into(),
-                score_was_calculated.then_some(appraisal.awarded_points).into(),
-            );
-            eval_obj.insert(
-                "available_points".into(),
-                score_was_calculated.then_some(appraisal.available_points).into(),
-            );
+            let point_totals = appraisal.point_totals();
+            eval_obj.insert("awarded_points".into(), point_totals.map(|points| points.0).into());
+            eval_obj.insert("available_points".into(), point_totals.map(|points| points.1).into());
             eval_obj.insert(
                 "reasons".into(),
                 json!(
@@ -69,7 +63,7 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
                         .expression_outcomes
                         .iter()
                         .map(|outcome| {
-                            let (disposition, failure_reason) = match &outcome.disposition {
+                            let (disposition, evaluation_error) = match &outcome.disposition {
                                 ExpressionDisposition::True => ("passed", None),
                                 ExpressionDisposition::False => ("failed", None),
                                 ExpressionDisposition::Failed(reason) => {
@@ -80,7 +74,7 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], writer: &mut W) -> Result<
                                 "name": outcome.name,
                                 "description": outcome.description,
                                 "disposition": disposition,
-                                "failure_reason": failure_reason,
+                                "evaluation_error": evaluation_error,
                             })
                         })
                         .collect::<Vec<_>>()
@@ -214,13 +208,17 @@ mod tests {
 
     #[test]
     fn test_generate_single_crate_with_evaluation() {
-        let eval = Appraisal {
-            risk: Risk::Low,
-            expression_outcomes: vec![ExpressionOutcome::new("good".into(), "Good".into(), ExpressionDisposition::True)],
-            available_points: 1,
-            awarded_points: 1,
-            score: 100.0,
-        };
+        let eval = Appraisal::new(
+            Risk::Low,
+            vec![ExpressionOutcome::new(
+                "good".into(),
+                "Good".into(),
+                ExpressionDisposition::True,
+            )],
+            1,
+            1,
+            100.0,
+        );
         let crates = vec![create_test_crate("test_crate", "1.0.0", Some(eval))];
         let mut output = String::new();
         let result = generate(&crates, &mut output);
@@ -250,13 +248,17 @@ mod tests {
 
     #[test]
     fn test_generate_denied_status() {
-        let eval = Appraisal {
-            risk: Risk::High,
-            expression_outcomes: vec![ExpressionOutcome::new("security".into(), "Security issue".into(), ExpressionDisposition::False)],
-            available_points: 1,
-            awarded_points: 0,
-            score: 0.0,
-        };
+        let eval = Appraisal::new(
+            Risk::High,
+            vec![ExpressionOutcome::new(
+                "security".into(),
+                "Security issue".into(),
+                ExpressionDisposition::False,
+            )],
+            1,
+            0,
+            0.0,
+        );
         let crates = vec![create_test_crate("bad_crate", "1.0.0", Some(eval))];
         let mut output = String::new();
         let result = generate(&crates, &mut output);
@@ -268,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_required_check_failure_has_null_score_and_failure_reason() {
+    fn test_generate_required_check_failure_has_null_score_and_evaluation_error() {
         let eval = Appraisal::required_check_failure(vec![ExpressionOutcome::new(
             "facts".into(),
             "Facts must be available.".into(),
@@ -292,7 +294,7 @@ mod tests {
         );
         assert_eq!(appraisal["outcomes"][0]["disposition"], "inconclusive");
         assert_eq!(
-            appraisal["outcomes"][0]["failure_reason"],
+            appraisal["outcomes"][0]["evaluation_error"],
             "service unavailable"
         );
     }

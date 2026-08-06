@@ -44,7 +44,7 @@ pub fn generate<W: Write>(crates: &[ReportableCrate], timestamp: DateTime<Local>
     };
     let crates_by_risk = |risk: Risk| -> Vec<(&str, String, String, f64)> {
         let mut v: Vec<_> = crates.iter()
-            .filter(|c| c.appraisal.as_ref().is_some_and(|a| a.risk == risk))
+            .filter(|c| c.appraisal.as_ref().is_some_and(|a| a.risk() == risk))
             .map(|c| {
                 (
                     c.name.as_ref(),
@@ -525,7 +525,7 @@ fn write_risk_crate_list<W: Write>(writer: &mut W, class: &str, title: &str, cra
 }
 
 fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrate) -> Result<()> {
-    let risk_class = crate_info.appraisal.as_ref().map_or("", |a| match a.risk {
+    let risk_class = crate_info.appraisal.as_ref().map_or("", |a| match a.risk() {
         Risk::Low => " risk-low",
         Risk::Medium => " risk-medium",
         Risk::High => " risk-high",
@@ -539,7 +539,7 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
     )?;
     writeln!(writer, "        <span class=\"spacer\"></span>")?;
     if let Some(appraisal) = &crate_info.appraisal {
-        let (class, label) = match appraisal.risk {
+        let (class, label) = match appraisal.risk() {
             Risk::Low => ("low", "LOW RISK"),
             Risk::Medium => ("medium", "MEDIUM RISK"),
             Risk::High => ("high", "HIGH RISK"),
@@ -554,14 +554,17 @@ fn write_crate_card_header<W: Write>(writer: &mut W, crate_info: &ReportableCrat
                 ))
             )?;
         } else {
+            let (awarded_points, available_points) = appraisal
+                .point_totals()
+                .expect("scored appraisals have point totals");
             writeln!(
                 writer,
                 "          <span class=\"appraisal-score\">score {:.0} · {}/{} points</span>",
                 appraisal
                     .weighted_score()
                     .expect("scored appraisals have a weighted score"),
-                appraisal.awarded_points,
-                appraisal.available_points
+                awarded_points,
+                available_points
             )?;
         }
         writeln!(writer, "          <span class=\"risk-badge {class}\">{label}</span>")?;
